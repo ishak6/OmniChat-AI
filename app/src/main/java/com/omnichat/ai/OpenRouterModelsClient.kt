@@ -1,6 +1,7 @@
 
 package com.omnichat.ai
 
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -8,8 +9,37 @@ import java.net.URL
 data class OpenRouterModel(
     val id: String,
     val name: String,
-    val isFree: Boolean
-)
+    val isFree: Boolean,
+    val inputModalities: List<String> = emptyList(),
+    val outputModalities: List<String> = emptyList(),
+    val promptPrice: String = "",
+    val completionPrice: String = "",
+    val contextLength: Int? = null,
+    val description: String = ""
+) {
+    val modelType: String
+        get() {
+            val all = (inputModalities + outputModalities)
+                .map { it.lowercase() }
+                .toSet()
+
+            return when {
+                "video" in all -> "Video"
+                "audio" in all -> "Audio"
+                "image" in outputModalities.map { it.lowercase() } ->
+                    "Image Generation"
+                "image" in all -> "Vision"
+                "text" in all -> "Chat"
+                else -> "Other"
+            }
+        }
+
+    val capabilities: List<String>
+        get() = buildList {
+            inputModalities.forEach { add("Input: $it") }
+            outputModalities.forEach { add("Output: $it") }
+        }
+}
 
 object OpenRouterModelsClient {
 
@@ -23,7 +53,7 @@ object OpenRouterModelsClient {
         try {
             connection.requestMethod = "GET"
             connection.connectTimeout = 20000
-            connection.readTimeout = 30000
+            connection.readTimeout = 45000
             connection.setRequestProperty(
                 "Accept",
                 "application/json"
@@ -32,8 +62,14 @@ object OpenRouterModelsClient {
             val code = connection.responseCode
 
             if (code !in 200..299) {
+                val error = connection.errorStream
+                    ?.bufferedReader()
+                    ?.use { it.readText() }
+                    .orEmpty()
+
                 throw Exception(
-                    "Could not load OpenRouter models. HTTP $code"
+                    "Could not load OpenRouter models. HTTP $code: " +
+                        error.take(300)
                 )
             }
 
@@ -49,81 +85,93 @@ object OpenRouterModelsClient {
 
             val models = mutableListOf<OpenRouterModel>()
 
-            // OpenRouter automatic free-model selection.
-            models.add(
-                OpenRouterModel(
-                    id = "openrouter/free",
-                    name = "Auto Select Free Model",
-                    isFree = true
-                )
-            )
-
             for (i in 0 until data.length()) {
                 val item = data.optJSONObject(i) ?: continue
 
                 val id = item.optString("id")
-                val name = item.optString("name", id)
-
                 if (id.isBlank()) continue
+
+                val name = item.optString("name")
+                    .takeIf { it.isNotBlank() }
+                    ?: id
 
                 val architecture =
                     item.optJSONObject("architecture")
 
-                val outputModalities =
+                val inputModalities = readStringArray(
+                    architecture?.optJSONArray("input_modalities")
+                )
+
+                val outputModalities = readStringArray(
                     architecture?.optJSONArray("output_modalities")
-
-                val modality =
-                    architecture?.optString("modality").orEmpty()
-
-                val isChatModel =
-                    outputModalities?.let { output ->
-                        (0 until output.length()).any {
-                            output.optString(it) == "text"
-                        }
-                    } ?: modality.contains("text->text")
-
-                if (!isChatModel) continue
+                )
 
                 val pricing = item.optJSONObject("pricing")
 
-                val promptPrice = pricing
-                    ?.optString("prompt")
-                    ?.toDoubleOrNull()
+                val promptPrice =
+                    pricing?.optString("prompt").orEmpty()
 
-                val completionPrice = pricing
-                    ?.optString("completion")
-                    ?.toDoubleOrNull()
+                val completionPrice =
+                    pricing?.optString("completion").orEmpty()
+
+                val promptValue =
+                    promptPrice.toDoubleOrNull()
+
+                val completionValue =
+                    completionPrice.toDoubleOrNull()
 
                 val isFree =
-                    id.endsWith(":free") ||
+                    id.endsWith(":free", ignoreCase = true) ||
                     (
-                        promptPrice == 0.0 &&
-                        completionPrice == 0.0
+                        promptValue == 0.0 &&
+                        completionValue == 0.0
                     )
 
-                if (isFree) {
-                    models.add(
-                        OpenRouterModel(
-                            id = id,
-                            name = name,
-                            isFree = true
-                        )
+                if (!isFree) continue
+
+                models.add(
+                    OpenRouterModel(
+                        id = id,
+                        name = name,
+                        isFree = true,
+                        inputModalities = inputModalities,
+                        outputModalities = outputModalities,
+                        promptPrice = promptPrice,
+                        completionPrice = completionPrice,
+                        contextLength = item
+                            .optInt("context_length")
+                            .takeIf { it > 0 },
+                        description = item
+                            .optString("description")
+                            .takeIf { it.isNotBlank() }
+                            .orEmpty()
                     )
-                }
+                )
             }
 
             return models
                 .distinctBy { it.id }
-                .sortedWith(
-                    compareByDescending<OpenRouterModel> {
-                        it.id == "openrouter/free"
-                    }.thenBy {
-                        it.name.lowercase()
-                    }
-                )
+                .sortedBy { it.name.lowercase() }
 
         } finally {
             connection.disconnect()
         }
+    }
+
+    private fun readStringArray(
+        array: JSONArray?
+    ): List<String> {
+        if (array == null) return emptyList()
+
+        return buildList {
+            for (index in 0 until array.length()) {
+                val value = array.optString(index)
+                    .trim()
+
+                if (value.isNotBlank()) {
+                    add(value)
+                }
+            }
+        }.distinct()
     }
 }
