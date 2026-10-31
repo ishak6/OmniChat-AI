@@ -23,13 +23,14 @@ object CustomApiChatClient {
         }
 
         val endpoint = buildEndpoint(config.baseUrl)
+
         val connection = URL(endpoint)
             .openConnection() as HttpURLConnection
 
         try {
             connection.requestMethod = "POST"
             connection.connectTimeout = 20000
-            connection.readTimeout = 60000
+            connection.readTimeout = 90000
             connection.doOutput = true
 
             connection.setRequestProperty(
@@ -67,7 +68,6 @@ object CustomApiChatClient {
             val requestBody = JSONObject().apply {
                 put("model", config.model)
                 put("messages", messageArray)
-                put("max_tokens", 2048)
                 put("stream", false)
             }
 
@@ -89,100 +89,69 @@ object CustomApiChatClient {
                     ?.use { it.readText() }
                     .orEmpty()
 
-                val errorMessage = try {
-                    val errorObject = JSONObject(errorText)
-                    val error = errorObject.opt("error")
-
-                    when (error) {
-                        is JSONObject -> {
-                            error.optString("message")
-                                .takeIf { it.isNotBlank() }
-                        }
-
-                        is String -> error.takeIf { it.isNotBlank() }
-
-                        else -> null
-                    }
-                } catch (_: Exception) {
-                    null
-                }
-
                 throw Exception(
-                    errorMessage
-                        ?: errorText.takeIf { it.isNotBlank() }?.take(500)
-                        ?: "Custom API request failed. HTTP $responseCode"
+                    extractApiError(errorText)
+                        ?: "API request failed. HTTP $responseCode"
                 )
             }
 
             if (responseText.isBlank()) {
                 throw Exception(
-                    "API returned an empty HTTP response. HTTP $responseCode"
+                    "API returned an empty HTTP response."
                 )
             }
 
             val response = try {
                 JSONObject(responseText)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 throw Exception(
                     "API returned invalid JSON: ${responseText.take(300)}"
                 )
             }
 
-            val choices = response.optJSONArray("choices")
-            val choice = choices?.optJSONObject(0)
-            val message = choice?.optJSONObject("message")
-
-            val answer = extractMessageContent(
-                message?.opt("content")
-            )
-
-            if (answer.isNotBlank()) {
-                return answer
+            extractAnswer(response)?.let { answer ->
+                if (answer.isNotBlank()) {
+                    return answer
+                }
             }
 
-            val refusal = message?.optString("refusal")
+            val error = response.optJSONObject("error")
+                ?.optString("message")
                 ?.takeIf { it.isNotBlank() }
 
-            if (refusal != null) {
-                return refusal
-            }
-
+            val choices = response.optJSONArray("choices")
+            val choice = choices?.optJSONObject(0)
             val finishReason = choice
                 ?.optString("finish_reason")
                 ?.takeIf { it.isNotBlank() }
 
-            val messageKeys = message?.let { obj ->
-                obj.keys().asSequence().toList().joinToString(", ")
-            } ?: "message object missing"
-
-            val responseKeys = response.keys()
-                .asSequence()
-                .toList()
-                .joinToString(", ")
-
-            val errorDetails = response.optJSONObject("error")
-                ?.optString("message")
-                ?.takeIf { it.isNotBlank() }
+            val toolCalls = choice
+                ?.optJSONObject("message")
+                ?.optJSONArray("tool_calls")
 
             throw Exception(
                 buildString {
-                    append(
-                        "API response contained no readable assistant text."
-                    )
+                    append("No readable text was returned by the model.")
 
-                    if (errorDetails != null) {
+                    if (error != null) {
                         append("\nAPI error: ")
-                        append(errorDetails.take(300))
+                        append(error.take(300))
                     }
 
-                    append("\nFinish reason: ")
-                    append(finishReason ?: "not provided")
+                    if (finishReason != null) {
+                        append("\nFinish reason: ")
+                        append(finishReason)
+                    }
 
-                    append("\nMessage fields: ")
-                    append(messageKeys)
+                    if (toolCalls != null && toolCalls.length() > 0) {
+                        append(
+                            "\nThe model returned tool calls instead of text. " +
+                                "This app currently does not execute model tool calls."
+                        )
+                    }
 
-                    append("\nResponse fields: ")
-                    append(responseKeys)
+                    append("\nModel: ")
+                    append(config.model)
                 }
             )
 
@@ -191,15 +160,74 @@ object CustomApiChatClient {
         }
     }
 
-    private fun extractMessageContent(content: Any?): String {
-        return when (content) {
-            is String -> content.trim()
+    private fun extractAnswer(response: JSONObject): String? {
+
+        // OpenAI-compatible Chat Completions response
+        val choices = response.optJSONArray("choices")
+
+        if (choices != null && choices.length() > 0) {
+            val choice = choices.optJSONObject(0)
+
+            if (choice != null) {
+                val message = choice.optJSONObject("message")
+
+                if (message != null) {
+
+                    // Standard message content
+                    extractText(message.opt("content"))?.let {
+                        return it
+                    }
+
+                    // Refusal response
+                    message.optString("refusal")
+                        .takeIf { it.isNotBlank() }
+                        ?.let { return it }
+                }
+
+                // Legacy completion format
+                choice.optString("text")
+                    .takeIf { it.isNotBlank() }
+                    ?.let { return it }
+            }
+        }
+
+        // OpenRouter or provider output_text field
+        response.optString("output_text")
+            .takeIf { it.isNotBlank() }
+            ?.let { return it }
+
+        // Responses-style output array
+        val output = response.optJSONArray("output")
+
+        if (output != null) {
+            for (i in 0 until output.length()) {
+                val item = output.optJSONObject(i) ?: continue
+
+                if (item.optString("type") == "message") {
+                    extractText(item.opt("content"))?.let {
+                        return it
+                    }
+                }
+            }
+        }
+
+        return null
+    }
+
+    private fun extractText(value: Any?): String? {
+        return when (value) {
+
+            is String -> {
+                value.trim().takeIf { it.isNotBlank() }
+            }
 
             is JSONArray -> {
                 val parts = mutableListOf<String>()
 
-                for (index in 0 until content.length()) {
-                    when (val part = content.opt(index)) {
+                for (i in 0 until value.length()) {
+                    val part = value.opt(i)
+
+                    when (part) {
                         is String -> {
                             if (part.isNotBlank()) {
                                 parts.add(part)
@@ -209,31 +237,55 @@ object CustomApiChatClient {
                         is JSONObject -> {
                             val type = part.optString("type")
 
-                            val text = when {
-                                part.opt("text") is String ->
-                                    part.optString("text")
-
-                                part.opt("content") is String ->
-                                    part.optString("content")
-
-                                else -> ""
-                            }
-
                             if (
-                                text.isNotBlank() &&
-                                (type.isBlank() || type == "text" ||
-                                    type == "output_text")
+                                type.isBlank() ||
+                                type == "text" ||
+                                type == "output_text"
                             ) {
-                                parts.add(text)
+                                val text = part.optString("text")
+                                    .takeIf { it.isNotBlank() }
+
+                                if (text != null) {
+                                    parts.add(text)
+                                }
                             }
                         }
                     }
                 }
 
-                parts.joinToString("\n").trim()
+                parts.joinToString("\n")
+                    .trim()
+                    .takeIf { it.isNotBlank() }
             }
 
-            else -> ""
+            else -> null
+        }
+    }
+
+    private fun extractApiError(errorText: String): String? {
+        if (errorText.isBlank()) return null
+
+        return try {
+            val json = JSONObject(errorText)
+            val error = json.opt("error")
+
+            when (error) {
+                is JSONObject -> {
+                    error.optString("message")
+                        .takeIf { it.isNotBlank() }
+                }
+
+                is String -> {
+                    error.takeIf { it.isNotBlank() }
+                }
+
+                else -> {
+                    json.optString("message")
+                        .takeIf { it.isNotBlank() }
+                }
+            }
+        } catch (_: Exception) {
+            errorText.take(500)
         }
     }
 
