@@ -1,4 +1,3 @@
-
 package com.omnichat.ai
 
 import android.os.Bundle
@@ -27,7 +26,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.UUID
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,6 +39,11 @@ private enum class MainTab(val label: String) {
     CHAT("Chat"),
     APIS("APIs"),
     SETTINGS("Settings")
+}
+
+private fun isOpenRouterProfile(profile: ApiProfile): Boolean {
+    return profile.provider.contains("openrouter", ignoreCase = true) ||
+        profile.baseUrl.contains("openrouter.ai", ignoreCase = true)
 }
 
 @Composable
@@ -87,8 +90,10 @@ fun OmniChatApp() {
                     MainTab.HOME -> HomeScreen {
                         tab = MainTab.CHAT
                     }
+
                     MainTab.CHAT -> ChatScreen()
                     MainTab.APIS -> ApiDashboardScreen()
+
                     MainTab.SETTINGS -> SettingsScreen(
                         darkMode = darkMode,
                         onThemeChange = { darkMode = it }
@@ -113,9 +118,16 @@ private fun AppHeader() {
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(30.dp)
         )
+
         Spacer(Modifier.width(10.dp))
+
         Column {
-            Text("OmniChat AI", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "OmniChat AI",
+                fontSize = 21.sp,
+                fontWeight = FontWeight.Bold
+            )
+
             Text(
                 "One interface, many minds",
                 style = MaterialTheme.typography.labelSmall,
@@ -147,6 +159,7 @@ private fun HomeScreen(onChat: () -> Unit) {
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )
+
             Text(
                 "Manage your AI providers and conversations.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -164,9 +177,17 @@ private fun HomeScreen(onChat: () -> Unit) {
                         modifier = Modifier.size(34.dp),
                         contentDescription = null
                     )
+
                     Spacer(Modifier.height(10.dp))
-                    Text("Start a conversation", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+
+                    Text(
+                        "Start a conversation",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
                     Text("Chat with your configured AI APIs.")
+
                     Button(
                         onClick = onChat,
                         modifier = Modifier.padding(top = 12.dp)
@@ -180,30 +201,45 @@ private fun HomeScreen(onChat: () -> Unit) {
         }
 
         item {
-            Text("API Overview", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "API Overview",
+                style = MaterialTheme.typography.titleLarge
+            )
         }
 
         item {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Configured APIs", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Configured APIs",
+                        fontWeight = FontWeight.SemiBold
+                    )
+
                     Text(
                         "${profiles.size} profiles",
                         style = MaterialTheme.typography.headlineMedium
                     )
+
                     Text(
                         "${profiles.count { it.enabled }} enabled",
                         color = MaterialTheme.colorScheme.primary
                     )
+
                     Text(
-                        "Default: ${profiles.firstOrNull { it.isDefault }?.name ?: "Not configured"}"
+                        "Default: ${
+                            profiles.firstOrNull { it.isDefault }?.name
+                                ?: "Not configured"
+                        }"
                     )
                 }
             }
         }
 
         item {
-            Text("Recent conversations", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "Recent conversations",
+                style = MaterialTheme.typography.titleLarge
+            )
         }
 
         items(
@@ -211,11 +247,15 @@ private fun HomeScreen(onChat: () -> Unit) {
             key = { it.id }
         ) { conversation ->
             Card(
-    onClick = onChat,
-    modifier = Modifier.fillMaxWidth()
-) {
+                onClick = onChat,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Column(Modifier.padding(14.dp)) {
-                    Text(conversation.title, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        conversation.title,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
                     Text(
                         "${conversation.messages.size} messages • ${conversation.providerName}",
                         style = MaterialTheme.typography.bodySmall
@@ -236,7 +276,12 @@ private fun ApiDashboardScreen() {
     var showEditor by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<ApiProfile?>(null) }
     var showImport by remember { mutableStateOf(false) }
+    var showOpenRouterSetup by remember { mutableStateOf(false) }
+
     var importText by remember { mutableStateOf("") }
+    var openRouterKey by remember { mutableStateOf("") }
+    var showOpenRouterKey by remember { mutableStateOf(false) }
+
     var status by remember { mutableStateOf("") }
     var testingId by remember { mutableStateOf<String?>(null) }
 
@@ -257,6 +302,7 @@ private fun ApiDashboardScreen() {
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold
                 )
+
                 Text(
                     "${profiles.size} configured profiles",
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -264,14 +310,32 @@ private fun ApiDashboardScreen() {
             }
 
             IconButton(onClick = { refresh++ }) {
-                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                Icon(
+                    Icons.Default.Refresh,
+                    contentDescription = "Refresh"
+                )
             }
+        }
+
+        // OpenRouter setup shortcut
+        OutlinedButton(
+            onClick = {
+                openRouterKey = ""
+                showOpenRouterSetup = true
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp)
+        ) {
+            Icon(Icons.Default.AutoAwesome, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("Add OpenRouter Free Models")
         }
 
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp),
+                .padding(horizontal = 14.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Button(
@@ -296,6 +360,7 @@ private fun ApiDashboardScreen() {
             OutlinedButton(
                 onClick = {
                     val export = JSONArray()
+
                     profiles.forEach { profile ->
                         export.put(
                             JSONObject().apply {
@@ -307,11 +372,19 @@ private fun ApiDashboardScreen() {
                             }
                         )
                     }
-                    clipboard.setText(AnnotatedString(export.toString(2)))
-                    status = "Profile metadata copied. API keys are not included."
+
+                    clipboard.setText(
+                        AnnotatedString(export.toString(2))
+                    )
+
+                    status =
+                        "Profile metadata copied. API keys are not included."
                 }
             ) {
-                Icon(Icons.Default.ContentCopy, contentDescription = "Export")
+                Icon(
+                    Icons.Default.ContentCopy,
+                    contentDescription = "Export"
+                )
             }
         }
 
@@ -330,7 +403,9 @@ private fun ApiDashboardScreen() {
                     .padding(24.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text("No API profiles yet. Tap Add API to get started.")
+                Text(
+                    "No API profiles yet. Tap Add API or Add OpenRouter Free Models to get started."
+                )
             }
         } else {
             LazyColumn(
@@ -343,6 +418,7 @@ private fun ApiDashboardScreen() {
                     ApiProfileCard(
                         profile = profile,
                         testing = testingId == profile.id,
+
                         onEnabled = { enabled ->
                             ApiProfileStore.setEnabled(
                                 context,
@@ -351,46 +427,65 @@ private fun ApiDashboardScreen() {
                             )
                             refresh++
                         },
+
                         onDefault = {
-                            ApiProfileStore.setDefault(context, profile.id)
+                            ApiProfileStore.setDefault(
+                                context,
+                                profile.id
+                            )
                             refresh++
                         },
+
                         onEdit = {
                             editing = profile
                             showEditor = true
                         },
+
                         onDelete = {
-                            ApiProfileStore.delete(context, profile.id)
+                            ApiProfileStore.delete(
+                                context,
+                                profile.id
+                            )
                             refresh++
                         },
+
                         onTest = {
-                            val key = ApiProfileStore.getApiKey(context, profile.id)
+                            val key = ApiProfileStore.getApiKey(
+                                context,
+                                profile.id
+                            )
+
                             if (key.isNullOrBlank()) {
-                                status = "API key missing for ${profile.name}."
+                                status =
+                                    "API key missing for ${profile.name}."
                             } else {
                                 testingId = profile.id
                                 status = "Testing ${profile.name}..."
 
                                 scope.launch {
                                     try {
-                                        val response = withContext(Dispatchers.IO) {
-                                            CustomApiChatClient.sendMessage(
-                                                key,
-                                                CustomApiConfig(
-                                                    profile.baseUrl,
-                                                    profile.model
-                                                ),
-                                                listOf(
-                                                    OpenAiMessage(
-                                                        "user",
-                                                        "Reply with OK."
+                                        val response =
+                                            withContext(Dispatchers.IO) {
+                                                CustomApiChatClient.sendMessage(
+                                                    key,
+                                                    CustomApiConfig(
+                                                        profile.baseUrl,
+                                                        profile.model
+                                                    ),
+                                                    listOf(
+                                                        OpenAiMessage(
+                                                            "user",
+                                                            "Reply with OK."
+                                                        )
                                                     )
                                                 )
-                                            )
-                                        }
-                                        status = "Connection successful: ${response.take(100)}"
+                                            }
+
+                                        status =
+                                            "Connection successful: ${response.take(100)}"
                                     } catch (e: Exception) {
-                                        status = "Connection failed: ${e.message}"
+                                        status =
+                                            "Connection failed: ${e.message}"
                                     } finally {
                                         testingId = null
                                     }
@@ -403,14 +498,120 @@ private fun ApiDashboardScreen() {
         }
     }
 
+    // OpenRouter setup dialog
+    if (showOpenRouterSetup) {
+        AlertDialog(
+            onDismissRequest = {
+                showOpenRouterSetup = false
+            },
+            title = {
+                Text("Connect OpenRouter")
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        "Enter your OpenRouter API key. It will be stored using the app's encrypted API key storage."
+                    )
+
+                    OutlinedTextField(
+                        value = openRouterKey,
+                        onValueChange = { openRouterKey = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("OpenRouter API Key") },
+                        placeholder = { Text("sk-or-v1-...") },
+                        singleLine = true,
+                        visualTransformation =
+                            if (showOpenRouterKey) {
+                                androidx.compose.ui.text.input.VisualTransformation.None
+                            } else {
+                                PasswordVisualTransformation()
+                            },
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    showOpenRouterKey = !showOpenRouterKey
+                                }
+                            ) {
+                                Icon(
+                                    if (showOpenRouterKey) {
+                                        Icons.Default.VisibilityOff
+                                    } else {
+                                        Icons.Default.Visibility
+                                    },
+                                    contentDescription = "Toggle key visibility"
+                                )
+                            }
+                        }
+                    )
+
+                    Text(
+                        "Base URL: https://openrouter.ai/api/v1",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+
+                    Text(
+                        "Initial model: openrouter/free",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = openRouterKey.isNotBlank(),
+                    onClick = {
+                        val result = ApiProfileStore.create(
+                            context = context,
+                            name = "OpenRouter",
+                            provider = "OpenRouter",
+                            baseUrl = "https://openrouter.ai/api/v1",
+                            model = "openrouter/free",
+                            apiKey = openRouterKey.trim(),
+                            enabled = true
+                        )
+
+                        status = if (result != null) {
+                            "OpenRouter profile created successfully."
+                        } else {
+                            "Could not create OpenRouter profile."
+                        }
+
+                        openRouterKey = ""
+                        showOpenRouterSetup = false
+                        refresh++
+                    }
+                ) {
+                    Text("Save OpenRouter")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showOpenRouterSetup = false
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     if (showEditor) {
         ApiProfileEditor(
             profile = editing,
-            onDismiss = { showEditor = false },
+            onDismiss = {
+                showEditor = false
+            },
             onSave = { name, provider, url, model, key ->
                 val result = if (editing == null) {
                     ApiProfileStore.create(
-                        context, name, provider, url, model, key
+                        context,
+                        name,
+                        provider,
+                        url,
+                        model,
+                        key
                     ) != null
                 } else {
                     ApiProfileStore.save(
@@ -425,8 +626,12 @@ private fun ApiDashboardScreen() {
                     )
                 }
 
-                status = if (result) "API profile saved." else
+                status = if (result) {
+                    "API profile saved."
+                } else {
                     "Could not save. Check fields and API key."
+                }
+
                 showEditor = false
                 refresh++
             }
@@ -435,13 +640,20 @@ private fun ApiDashboardScreen() {
 
     if (showImport) {
         AlertDialog(
-            onDismissRequest = { showImport = false },
-            title = { Text("Import API Profiles") },
+            onDismissRequest = {
+                showImport = false
+            },
+            title = {
+                Text("Import API Profiles")
+            },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text(
                         "Paste a JSON array. Each entry must include name, baseUrl, model and apiKey."
                     )
+
                     OutlinedTextField(
                         value = importText,
                         onValueChange = { importText = it },
@@ -455,17 +667,27 @@ private fun ApiDashboardScreen() {
             confirmButton = {
                 TextButton(
                     onClick = {
-                        val result = ApiProfileStore.importJson(context, importText)
-                        status = "Imported: ${result.imported}, skipped: ${result.skipped}. " +
-                            result.errors.take(2).joinToString(" ")
+                        val result = ApiProfileStore.importJson(
+                            context,
+                            importText
+                        )
+
+                        status =
+                            "Imported: ${result.imported}, skipped: ${result.skipped}. " +
+                                result.errors.take(2).joinToString(" ")
+
                         importText = ""
                         showImport = false
                         refresh++
                     }
-                ) { Text("Import") }
+                ) {
+                    Text("Import")
+                }
             },
             dismissButton = {
-                TextButton(onClick = { showImport = false }) {
+                TextButton(
+                    onClick = { showImport = false }
+                ) {
                     Text("Cancel")
                 }
             }
@@ -490,12 +712,17 @@ private fun ApiProfileCard(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(profile.name, fontWeight = FontWeight.Bold)
+                    Text(
+                        profile.name,
+                        fontWeight = FontWeight.Bold
+                    )
+
                     Text(
                         "${profile.provider} • ${profile.model}",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
+
                 Switch(
                     checked = profile.enabled,
                     onCheckedChange = onEnabled
@@ -514,7 +741,10 @@ private fun ApiProfileCard(
                         onClick = {},
                         label = { Text("Default API") },
                         leadingIcon = {
-                            Icon(Icons.Default.Star, contentDescription = null)
+                            Icon(
+                                Icons.Default.Star,
+                                contentDescription = null
+                            )
                         }
                     )
                 } else {
@@ -525,11 +755,14 @@ private fun ApiProfileCard(
                         Text("Set Default")
                     }
                 }
+
                 Spacer(Modifier.weight(1f))
+
                 TextButton(onClick = onEdit) {
                     Icon(Icons.Default.Edit, contentDescription = null)
                     Text("Edit")
                 }
+
                 TextButton(onClick = onDelete) {
                     Icon(Icons.Default.Delete, contentDescription = null)
                 }
@@ -546,10 +779,17 @@ private fun ApiProfileCard(
                         strokeWidth = 2.dp
                     )
                 } else {
-                    Icon(Icons.Default.NetworkCheck, contentDescription = null)
+                    Icon(
+                        Icons.Default.NetworkCheck,
+                        contentDescription = null
+                    )
                 }
+
                 Spacer(Modifier.width(8.dp))
-                Text(if (testing) "Testing..." else "Test Connection")
+
+                Text(
+                    if (testing) "Testing..." else "Test Connection"
+                )
             }
         }
     }
@@ -570,52 +810,86 @@ private fun ApiProfileEditor(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (profile == null) "Add API Profile" else "Edit API Profile") },
+        title = {
+            Text(
+                if (profile == null) {
+                    "Add API Profile"
+                } else {
+                    "Edit API Profile"
+                }
+            )
+        },
         text = {
             Column(
                 Modifier.heightIn(max = 520.dp),
                 verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
                 OutlinedTextField(
-                    name, { name = it },
+                    name,
+                    { name = it },
                     label = { Text("Profile name") },
                     singleLine = true
                 )
+
                 OutlinedTextField(
-                    provider, { provider = it },
+                    provider,
+                    { provider = it },
                     label = { Text("Provider name") },
                     singleLine = true
                 )
+
                 OutlinedTextField(
-                    url, { url = it },
+                    url,
+                    { url = it },
                     label = { Text("API Base URL") },
-                    placeholder = { Text("https://api.example.com/v1") },
+                    placeholder = {
+                        Text("https://api.example.com/v1")
+                    },
                     singleLine = true
                 )
+
                 OutlinedTextField(
-                    model, { model = it },
+                    model,
+                    { model = it },
                     label = { Text("Model ID") },
                     singleLine = true
                 )
+
                 OutlinedTextField(
-                    key, { key = it },
+                    key,
+                    { key = it },
                     label = {
-                        Text(if (profile == null) "API Key" else "New API Key (optional)")
+                        Text(
+                            if (profile == null) {
+                                "API Key"
+                            } else {
+                                "New API Key (optional)"
+                            }
+                        )
                     },
-                    visualTransformation = if (showKey) {
-                        androidx.compose.ui.text.input.VisualTransformation.None
-                    } else PasswordVisualTransformation(),
+                    visualTransformation =
+                        if (showKey) {
+                            androidx.compose.ui.text.input.VisualTransformation.None
+                        } else {
+                            PasswordVisualTransformation()
+                        },
                     trailingIcon = {
-                        IconButton(onClick = { showKey = !showKey }) {
+                        IconButton(
+                            onClick = { showKey = !showKey }
+                        ) {
                             Icon(
-                                if (showKey) Icons.Default.VisibilityOff
-                                else Icons.Default.Visibility,
+                                if (showKey) {
+                                    Icons.Default.VisibilityOff
+                                } else {
+                                    Icons.Default.Visibility
+                                },
                                 contentDescription = "Toggle key visibility"
                             )
                         }
                     },
                     singleLine = true
                 )
+
                 Text(
                     "Compatible with OpenAI-style /chat/completions endpoints.",
                     style = MaterialTheme.typography.bodySmall
@@ -624,16 +898,27 @@ private fun ApiProfileEditor(
         },
         confirmButton = {
             TextButton(
-                enabled = name.isNotBlank() && url.isNotBlank() &&
-                    model.isNotBlank() && (profile != null || key.isNotBlank()),
+                enabled = name.isNotBlank() &&
+                    url.isNotBlank() &&
+                    model.isNotBlank() &&
+                    (profile != null || key.isNotBlank()),
                 onClick = {
-                    onSave(name.trim(), provider.trim(), url.trim().trimEnd('/'),
-                        model.trim(), key.trim())
+                    onSave(
+                        name.trim(),
+                        provider.trim(),
+                        url.trim().trimEnd('/'),
+                        model.trim(),
+                        key.trim()
+                    )
                 }
-            ) { Text("Save") }
+            ) {
+                Text("Save")
+            }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
         }
     )
 }
@@ -644,18 +929,41 @@ private fun ChatScreen() {
     val scope = rememberCoroutineScope()
 
     var refresh by remember { mutableIntStateOf(0) }
+
     var selectedProfileId by remember {
         mutableStateOf(ApiProfileStore.getDefault(context)?.id)
     }
+
     var conversationId by remember { mutableStateOf<String?>(null) }
     var messages by remember { mutableStateOf(emptyList<OpenAiMessage>()) }
     var input by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
+
     var showProfiles by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
     var showMemory by remember { mutableStateOf(false) }
-    var memoryMode by remember { mutableStateOf(MemoryTransferMode.FULL_HISTORY) }
+
+    var memoryMode by remember {
+        mutableStateOf(MemoryTransferMode.FULL_HISTORY)
+    }
+
+    // OpenRouter model picker state
+    var openRouterModels by remember {
+        mutableStateOf<List<OpenRouterModel>>(emptyList())
+    }
+
+    var loadingOpenRouterModels by remember {
+        mutableStateOf(false)
+    }
+
+    var showOpenRouterModels by remember {
+        mutableStateOf(false)
+    }
+
+    var openRouterModelError by remember {
+        mutableStateOf("")
+    }
 
     val profiles = remember(refresh) {
         ApiProfileStore.getAll(context).filter {
@@ -675,12 +983,14 @@ private fun ChatScreen() {
 
     fun newConversation() {
         val profile = selectedProfile
+
         val conversation = ChatHistoryStore.create(
             context,
             providerName = profile?.provider ?: "",
             profileId = profile?.id,
             model = profile?.model ?: ""
         )
+
         conversationId = conversation?.id
         messages = emptyList()
         error = ""
@@ -688,14 +998,79 @@ private fun ChatScreen() {
 
     fun openConversation(id: String) {
         val conversation = ChatHistoryStore.get(context, id) ?: return
+
         conversationId = id
         messages = conversation.messages
-        if (conversation.profileId != null &&
+
+        if (
+            conversation.profileId != null &&
             profiles.any { it.id == conversation.profileId }
         ) {
             selectedProfileId = conversation.profileId
         }
+
         error = ""
+    }
+
+    fun loadOpenRouterModels() {
+        if (loadingOpenRouterModels) return
+
+        loadingOpenRouterModels = true
+        openRouterModelError = ""
+        showOpenRouterModels = true
+
+        scope.launch {
+            try {
+                val loaded = withContext(Dispatchers.IO) {
+                    OpenRouterModelsClient.getModels()
+                }
+
+                openRouterModels = loaded
+
+                if (loaded.isEmpty()) {
+                    openRouterModelError =
+                        "No free text models were returned by OpenRouter."
+                }
+            } catch (e: Exception) {
+                openRouterModelError =
+                    e.message ?: "Could not load OpenRouter models."
+            } finally {
+                loadingOpenRouterModels = false
+            }
+        }
+    }
+
+    fun selectOpenRouterModel(model: OpenRouterModel) {
+        val profile = selectedProfile ?: return
+
+        val updated = profile.copy(model = model.id)
+
+        val saved = ApiProfileStore.save(
+            context,
+            updated,
+            null
+        )
+
+        if (saved) {
+            selectedProfileId = updated.id
+
+            conversationId?.let { id ->
+                ChatHistoryStore.updateAi(
+                    context,
+                    id,
+                    updated.provider,
+                    updated.id,
+                    updated.model
+                )
+            }
+
+            refresh++
+            showOpenRouterModels = false
+            error = ""
+        } else {
+            openRouterModelError =
+                "Could not save the selected model."
+        }
     }
 
     fun send() {
@@ -705,17 +1080,23 @@ private fun ChatScreen() {
         if (text.isBlank() || sending) return
 
         if (profile == null) {
-            error = "No enabled API profile with a saved key. Add one in APIs."
+            error =
+                "No enabled API profile with a saved key. Add one in APIs."
             return
         }
 
-        val key = ApiProfileStore.getApiKey(context, profile.id)
+        val key = ApiProfileStore.getApiKey(
+            context,
+            profile.id
+        )
+
         if (key.isNullOrBlank()) {
             error = "API key not found. Check API settings."
             return
         }
 
         var id = conversationId
+
         if (id == null) {
             val created = ChatHistoryStore.create(
                 context,
@@ -724,6 +1105,7 @@ private fun ChatScreen() {
                 profile.id,
                 profile.model
             )
+
             id = created?.id
             conversationId = id
         }
@@ -733,7 +1115,11 @@ private fun ChatScreen() {
             return
         }
 
-        val conversation = ChatHistoryStore.get(context, currentId)
+        val conversation = ChatHistoryStore.get(
+            context,
+            currentId
+        )
+
         val requestHistory = if (conversation == null) {
             messages
         } else {
@@ -743,7 +1129,8 @@ private fun ChatScreen() {
             )
         }
 
-        val requestMessages = requestHistory + OpenAiMessage("user", text)
+        val requestMessages =
+            requestHistory + OpenAiMessage("user", text)
 
         input = ""
         sending = true
@@ -756,12 +1143,17 @@ private fun ChatScreen() {
                 val answer = withContext(Dispatchers.IO) {
                     CustomApiChatClient.sendMessage(
                         key,
-                        CustomApiConfig(profile.baseUrl, profile.model),
+                        CustomApiConfig(
+                            profile.baseUrl,
+                            profile.model
+                        ),
                         requestMessages
                     )
                 }
 
-                val assistantMessage = OpenAiMessage("assistant", answer)
+                val assistantMessage =
+                    OpenAiMessage("assistant", answer)
+
                 messages = messages + assistantMessage
 
                 ChatHistoryStore.addMessage(
@@ -769,11 +1161,13 @@ private fun ChatScreen() {
                     currentId,
                     OpenAiMessage("user", text)
                 )
+
                 ChatHistoryStore.addMessage(
                     context,
                     currentId,
                     assistantMessage
                 )
+
                 ChatHistoryStore.updateAi(
                     context,
                     currentId,
@@ -781,6 +1175,7 @@ private fun ChatScreen() {
                     profile.id,
                     profile.model
                 )
+
                 refresh++
             } catch (e: Exception) {
                 error = e.message ?: "Request failed."
@@ -805,24 +1200,37 @@ private fun ChatScreen() {
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold
                 )
+
                 Text(
-                    selectedProfile?.let { "${it.name} • ${it.model}" }
-                        ?: "No API selected",
+                    selectedProfile?.let {
+                        "${it.name} • ${it.model}"
+                    } ?: "No API selected",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
 
             IconButton(onClick = { showHistory = true }) {
-                Icon(Icons.Default.History, contentDescription = "History")
+                Icon(
+                    Icons.Default.History,
+                    contentDescription = "History"
+                )
             }
+
             IconButton(onClick = { showMemory = true }) {
-                Icon(Icons.Default.Memory, contentDescription = "Memory")
+                Icon(
+                    Icons.Default.Memory,
+                    contentDescription = "Memory"
+                )
             }
+
             IconButton(
                 onClick = { newConversation() },
                 enabled = !sending
             ) {
-                Icon(Icons.Default.Add, contentDescription = "New chat")
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = "New chat"
+                )
             }
         }
 
@@ -831,11 +1239,65 @@ private fun ChatScreen() {
             modifier = Modifier.fillMaxWidth(),
             enabled = !sending
         ) {
-            Icon(Icons.Default.SwapHoriz, contentDescription = null)
+            Icon(
+                Icons.Default.SwapHoriz,
+                contentDescription = null
+            )
+
             Spacer(Modifier.width(8.dp))
-            Text("Switch AI: ${selectedProfile?.name ?: "Select API"}")
+
+            Text(
+                "Switch AI: ${selectedProfile?.name ?: "Select API"}"
+            )
+
             Spacer(Modifier.weight(1f))
-            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+
+            Icon(
+                Icons.Default.ArrowDropDown,
+                contentDescription = null
+            )
+        }
+
+        // Show model picker only for OpenRouter profiles
+        if (selectedProfile != null &&
+            isOpenRouterProfile(selectedProfile)
+        ) {
+            OutlinedButton(
+                onClick = { loadOpenRouterModels() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp),
+                enabled = !sending && !loadingOpenRouterModels
+            ) {
+                if (loadingOpenRouterModels) {
+                    CircularProgressIndicator(
+                        Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.ViewList,
+                        contentDescription = null
+                    )
+                }
+
+                Spacer(Modifier.width(8.dp))
+
+                Text(
+                    if (loadingOpenRouterModels) {
+                        "Loading Free Models..."
+                    } else {
+                        "OpenRouter Free Models"
+                    }
+                )
+
+                Spacer(Modifier.weight(1f))
+
+                Icon(
+                    Icons.Default.ArrowDropDown,
+                    contentDescription = null
+                )
+            }
         }
 
         Text(
@@ -869,12 +1331,16 @@ private fun ChatScreen() {
 
             if (sending) {
                 item {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         CircularProgressIndicator(
                             Modifier.size(18.dp),
                             strokeWidth = 2.dp
                         )
+
                         Spacer(Modifier.width(10.dp))
+
                         Text("AI is responding...")
                     }
                 }
@@ -904,64 +1370,228 @@ private fun ChatScreen() {
                 maxLines = 5,
                 enabled = !sending
             )
+
             Spacer(Modifier.width(8.dp))
+
             FilledIconButton(
                 onClick = { send() },
                 enabled = input.isNotBlank() && !sending
             ) {
-                Icon(Icons.Default.Send, contentDescription = "Send")
+                Icon(
+                    Icons.Default.Send,
+                    contentDescription = "Send"
+                )
             }
         }
     }
 
+    // AI profile selection
     if (showProfiles) {
         AlertDialog(
-            onDismissRequest = { showProfiles = false },
-            title = { Text("Choose an AI") },
+            onDismissRequest = {
+                showProfiles = false
+            },
+            title = {
+                Text("Choose an AI")
+            },
             text = {
-                LazyColumn(Modifier.heightIn(max = 420.dp)) {
-                    items(profiles, key = { it.id }) { profile ->
+                LazyColumn(
+                    Modifier.heightIn(max = 420.dp)
+                ) {
+                    items(
+                        profiles,
+                        key = { it.id }
+                    ) { profile ->
                         TextButton(
                             onClick = {
                                 selectedProfileId = profile.id
+
                                 conversationId?.let { id ->
                                     ChatHistoryStore.updateAi(
-                                        context, id, profile.provider,
-                                        profile.id, profile.model
+                                        context,
+                                        id,
+                                        profile.provider,
+                                        profile.id,
+                                        profile.model
                                     )
                                 }
+
                                 showProfiles = false
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Text(profile.name, fontWeight = FontWeight.SemiBold)
-                                Text(profile.model, style = MaterialTheme.typography.bodySmall)
+                                Text(
+                                    profile.name,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+
+                                Text(
+                                    profile.model,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
                             }
+
                             if (profile.id == selectedProfileId) {
-                                Icon(Icons.Default.Check, contentDescription = null)
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null
+                                )
                             }
                         }
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showProfiles = false }) { Text("Close") }
+                TextButton(
+                    onClick = { showProfiles = false }
+                ) {
+                    Text("Close")
+                }
             }
         )
     }
 
+    // OpenRouter Free Models dialog
+    if (showOpenRouterModels) {
+        AlertDialog(
+            onDismissRequest = {
+                showOpenRouterModels = false
+            },
+            title = {
+                Text("OpenRouter Free Models")
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        "Choose a free model. The selection will be saved to your OpenRouter profile.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+
+                    if (loadingOpenRouterModels) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator()
+                            Spacer(Modifier.width(12.dp))
+                            Text("Loading models...")
+                        }
+                    }
+
+                    if (openRouterModelError.isNotBlank()) {
+                        Text(
+                            openRouterModelError,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+
+                        TextButton(
+                            onClick = {
+                                loadOpenRouterModels()
+                            }
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = null
+                            )
+                            Text(" Retry")
+                        }
+                    }
+
+                    LazyColumn(
+                        Modifier.heightIn(max = 420.dp)
+                    ) {
+                        items(
+                            openRouterModels,
+                            key = { it.id }
+                        ) { model ->
+                            val selected =
+                                selectedProfile?.model == model.id
+
+                            TextButton(
+                                onClick = {
+                                    selectOpenRouterModel(model)
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        model.name,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+
+                                    Text(
+                                        model.id,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+
+                                if (selected) {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = "Selected"
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showOpenRouterModels = false
+                    }
+                ) {
+                    Text("Close")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        loadOpenRouterModels()
+                    },
+                    enabled = !loadingOpenRouterModels
+                ) {
+                    Text("Refresh")
+                }
+            }
+        )
+    }
+
+    // Chat history dialog
     if (showHistory) {
         AlertDialog(
-            onDismissRequest = { showHistory = false },
-            title = { Text("Chat History") },
+            onDismissRequest = {
+                showHistory = false
+            },
+            title = {
+                Text("Chat History")
+            },
             text = {
                 val history = ChatHistoryStore.getAll(context)
-                LazyColumn(Modifier.heightIn(max = 440.dp)) {
+
+                LazyColumn(
+                    Modifier.heightIn(max = 440.dp)
+                ) {
                     if (history.isEmpty()) {
-                        item { Text("No saved conversations.") }
+                        item {
+                            Text("No saved conversations.")
+                        }
                     }
-                    items(history, key = { it.id }) { conversation ->
+
+                    items(
+                        history,
+                        key = { it.id }
+                    ) { conversation ->
                         Row(
                             Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
@@ -974,64 +1604,103 @@ private fun ChatScreen() {
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Column(Modifier.fillMaxWidth()) {
-                                    Text(conversation.title, fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        conversation.title,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+
                                     Text(
                                         "${conversation.messages.size} messages • ${conversation.providerName}",
                                         style = MaterialTheme.typography.bodySmall
                                     )
                                 }
                             }
+
                             IconButton(
                                 onClick = {
-                                    ChatHistoryStore.delete(context, conversation.id)
+                                    ChatHistoryStore.delete(
+                                        context,
+                                        conversation.id
+                                    )
                                     refresh++
                                 }
                             ) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete")
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "Delete"
+                                )
                             }
                         }
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showHistory = false }) { Text("Close") }
+                TextButton(
+                    onClick = { showHistory = false }
+                ) {
+                    Text("Close")
+                }
             },
             dismissButton = {
                 TextButton(
                     onClick = {
                         ChatHistoryStore.clearAll(context)
+
                         if (conversationId != null) {
                             conversationId = null
                             messages = emptyList()
                         }
+
                         showHistory = false
                     }
-                ) { Text("Clear All") }
+                ) {
+                    Text("Clear All")
+                }
             }
         )
     }
 
+    // Conversation memory dialog
     if (showMemory) {
         AlertDialog(
-            onDismissRequest = { showMemory = false },
-            title = { Text("Conversation Memory") },
+            onDismissRequest = {
+                showMemory = false
+            },
+            title = {
+                Text("Conversation Memory")
+            },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Choose what context to send when switching AI.")
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        "Choose what context to send when switching AI."
+                    )
+
                     MemoryTransferMode.values().forEach { mode ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             RadioButton(
                                 selected = memoryMode == mode,
-                                onClick = { memoryMode = mode }
+                                onClick = {
+                                    memoryMode = mode
+                                }
                             )
+
                             Column {
-                                Text(mode.name.replace('_', ' '))
+                                Text(
+                                    mode.name.replace('_', ' ')
+                                )
+
                                 Text(
                                     when (mode) {
                                         MemoryTransferMode.FULL_HISTORY ->
                                             "Send all previous messages."
+
                                         MemoryTransferMode.SUMMARY ->
                                             "Send a compact transcript excerpt. This is not AI-generated summarization."
+
                                         MemoryTransferMode.SAVED_MEMORY ->
                                             "Send the latest 10 user messages."
                                     },
@@ -1040,6 +1709,7 @@ private fun ChatScreen() {
                             }
                         }
                     }
+
                     Text(
                         "Messages selected here are sent to the chosen API provider.",
                         color = MaterialTheme.colorScheme.error,
@@ -1048,7 +1718,11 @@ private fun ChatScreen() {
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showMemory = false }) { Text("Done") }
+                TextButton(
+                    onClick = { showMemory = false }
+                ) {
+                    Text("Done")
+                }
             }
         )
     }
@@ -1060,7 +1734,11 @@ private fun ChatMessageBubble(message: OpenAiMessage) {
 
     Row(
         Modifier.fillMaxWidth(),
-        horizontalArrangement = if (user) Arrangement.End else Arrangement.Start
+        horizontalArrangement = if (user) {
+            Arrangement.End
+        } else {
+            Arrangement.Start
+        }
     ) {
         Card(
             Modifier.widthIn(max = 330.dp),
@@ -1068,7 +1746,9 @@ private fun ChatMessageBubble(message: OpenAiMessage) {
             colors = CardDefaults.cardColors(
                 containerColor = if (user) {
                     MaterialTheme.colorScheme.primaryContainer
-                } else MaterialTheme.colorScheme.surfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant
+                }
             )
         ) {
             Column(Modifier.padding(13.dp)) {
@@ -1078,7 +1758,9 @@ private fun ChatMessageBubble(message: OpenAiMessage) {
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
+
                 Spacer(Modifier.height(5.dp))
+
                 Text(message.content)
             }
         }
@@ -1091,6 +1773,7 @@ private fun SettingsScreen(
     onThemeChange: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
+
     val historyCount = remember {
         ChatHistoryStore.getAll(context).size
     }
@@ -1115,9 +1798,18 @@ private fun SettingsScreen(
                     Modifier.padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.DarkMode, contentDescription = null)
+                    Icon(
+                        Icons.Default.DarkMode,
+                        contentDescription = null
+                    )
+
                     Spacer(Modifier.width(12.dp))
-                    Text("Dark mode", Modifier.weight(1f))
+
+                    Text(
+                        "Dark mode",
+                        Modifier.weight(1f)
+                    )
+
                     Switch(
                         checked = darkMode,
                         onCheckedChange = onThemeChange
@@ -1132,10 +1824,15 @@ private fun SettingsScreen(
                     Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Security & Privacy", fontWeight = FontWeight.Bold)
+                    Text(
+                        "Security & Privacy",
+                        fontWeight = FontWeight.Bold
+                    )
+
                     Text(
                         "API keys are encrypted with Android Keystore. Profile exports exclude API keys."
                     )
+
                     Text(
                         "Chat history is stored locally on this device. When you send a message, selected conversation context is transmitted to your chosen API provider."
                     )
@@ -1146,8 +1843,13 @@ private fun SettingsScreen(
         item {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Local Data", fontWeight = FontWeight.Bold)
+                    Text(
+                        "Local Data",
+                        fontWeight = FontWeight.Bold
+                    )
+
                     Text("$historyCount saved conversations")
+
                     Text(
                         "Conversation history is not encrypted separately by this version."
                     )
