@@ -1,3 +1,4 @@
+
 package com.omnichat.ai
 
 import org.json.JSONArray
@@ -51,16 +52,15 @@ object CustomApiChatClient {
             messages.forEach { message ->
                 val item = JSONObject()
 
-                item.put(
-                    "role",
-                    if (message.role == "assistant") {
-                        "assistant"
-                    } else {
-                        "user"
-                    }
-                )
+                val role = when (message.role.lowercase(Locale.ROOT)) {
+                    "assistant" -> "assistant"
+                    "system" -> "system"
+                    else -> "user"
+                }
 
+                item.put("role", role)
                 item.put("content", message.content)
+
                 messageArray.put(item)
             }
 
