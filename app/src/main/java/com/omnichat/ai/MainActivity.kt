@@ -2,11 +2,14 @@
 package com.omnichat.ai
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -20,6 +23,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -305,72 +311,253 @@ private fun FeatureCard(
 
 @Composable
 private fun ChatScreen() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
     var message by remember { mutableStateOf("") }
+    var isSending by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
+
+    var messages by remember {
+        mutableStateOf(
+            listOf(
+                OpenAiMessage(
+                    role = "assistant",
+                    content = "Hello! Welcome to OmniChat AI. " +
+                        "Connect your OpenAI API key in Settings " +
+                        "and send me a message."
+                )
+            )
+        )
+    }
+
+    val sendMessage: () -> Unit = {
+        val userMessage = message.trim()
+
+        if (userMessage.isNotBlank() && !isSending) {
+            val apiKey = SecureApiKeyStore.get(
+                context,
+                "openai"
+            )
+
+            if (apiKey.isNullOrBlank()) {
+                errorMessage =
+                    "OpenAI API key not found. " +
+                    "Go to Settings and save your API key."
+            } else {
+                message = ""
+                errorMessage = ""
+                isSending = true
+
+                val updatedMessages = messages + OpenAiMessage(
+                    role = "user",
+                    content = userMessage
+                )
+
+                messages = updatedMessages
+
+                scope.launch {
+                    try {
+                        val answer = withContext(Dispatchers.IO) {
+                            OpenAiChatClient.sendMessage(
+                                apiKey = apiKey,
+                                messages = updatedMessages
+                            )
+                        }
+
+                        messages = messages + OpenAiMessage(
+                            role = "assistant",
+                            content = answer
+                        )
+
+                    } catch (e: Exception) {
+                        errorMessage = e.message
+                            ?: "Something went wrong. Please try again."
+
+                    } finally {
+                        isSending = false
+                    }
+                }
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(20.dp)
+            .padding(horizontal = 16.dp)
     ) {
-        Text(
-            "AI Chat",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
-        )
-
-        Text(
-            "Connect an AI provider to start chatting.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 6.dp)
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.padding(18.dp)) {
-                Icon(
-                    Icons.Default.Info,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "AI Chat",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text("No AI provider connected yet.")
-
                 Text(
-                    "Provider setup is available in Settings. " +
-                        "Live AI responses will be added in the next step.",
+                    "OpenAI • gpt-4o-mini",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
+            IconButton(
+                onClick = {
+                    if (!isSending) {
+                        messages = listOf(
+                            OpenAiMessage(
+                                role = "assistant",
+                                content = "New conversation started. " +
+                                    "How can I help you?"
+                            )
+                        )
+                        errorMessage = ""
+                    }
+                },
+                enabled = !isSending
+            ) {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = "New chat"
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        HorizontalDivider()
 
-        OutlinedTextField(
-            value = message,
-            onValueChange = { message = it },
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Message OmniChat...") },
-            shape = RoundedCornerShape(18.dp),
-            trailingIcon = {
-                IconButton(
-                    onClick = {},
-                    enabled = message.isNotBlank()
-                ) {
-                    Icon(
-                        Icons.Default.Send,
-                        contentDescription = "Send"
-                    )
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentPadding = PaddingValues(vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(messages) { chatMessage ->
+                ChatMessageBubble(chatMessage)
+            }
+
+            if (isSending) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
+                        )
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Text(
+                            "OmniChat is thinking...",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 }
-            },
-            maxLines = 4
-        )
+            }
+        }
+
+        if (errorMessage.isNotBlank()) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Text(
+                    errorMessage,
+                    modifier = Modifier.padding(12.dp),
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            OutlinedTextField(
+                value = message,
+                onValueChange = { message = it },
+                modifier = Modifier.weight(1f),
+                placeholder = {
+                    Text("Message OmniChat...")
+                },
+                shape = RoundedCornerShape(22.dp),
+                maxLines = 5,
+                enabled = !isSending
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            FilledIconButton(
+                onClick = sendMessage,
+                enabled = message.isNotBlank() && !isSending,
+                modifier = Modifier.size(52.dp)
+            ) {
+                Icon(
+                    Icons.Default.Send,
+                    contentDescription = "Send message"
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChatMessageBubble(message: OpenAiMessage) {
+    val isUser = message.role == "user"
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (isUser) {
+            Arrangement.End
+        } else {
+            Arrangement.Start
+        }
+    ) {
+        Card(
+            modifier = Modifier.widthIn(max = 320.dp),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isUser) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant
+                }
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp)
+            ) {
+                Text(
+                    if (isUser) "You" else "OmniChat AI",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                Spacer(modifier = Modifier.height(5.dp))
+
+                Text(
+                    message.content,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
     }
 }
 
