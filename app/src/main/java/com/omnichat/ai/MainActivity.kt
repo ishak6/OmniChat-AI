@@ -15,7 +15,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -33,6 +35,24 @@ private data class AppTab(
     val icon: ImageVector
 )
 
+private data class AIProvider(
+    val id: String,
+    val name: String
+)
+
+private val aiProviders = listOf(
+    AIProvider("openai", "OpenAI"),
+    AIProvider("gemini", "Google Gemini"),
+    AIProvider("claude", "Anthropic Claude"),
+    AIProvider("deepseek", "DeepSeek"),
+    AIProvider("grok", "xAI Grok"),
+    AIProvider("mistral", "Mistral AI"),
+    AIProvider("openrouter", "OpenRouter"),
+    AIProvider("groq", "Groq"),
+    AIProvider("together", "Together AI"),
+    AIProvider("custom", "Custom Provider")
+)
+
 @Composable
 fun OmniChatApp() {
     var selectedTab by remember { mutableStateOf(0) }
@@ -47,7 +67,11 @@ fun OmniChatApp() {
     )
 
     MaterialTheme(
-        colorScheme = if (darkMode) darkColorScheme() else lightColorScheme()
+        colorScheme = if (darkMode) {
+            darkColorScheme()
+        } else {
+            lightColorScheme()
+        }
     ) {
         Scaffold(
             bottomBar = {
@@ -57,7 +81,10 @@ fun OmniChatApp() {
                             selected = selectedTab == index,
                             onClick = { selectedTab = index },
                             icon = {
-                                Icon(tab.icon, contentDescription = tab.title)
+                                Icon(
+                                    tab.icon,
+                                    contentDescription = tab.title
+                                )
                             },
                             label = { Text(tab.title) }
                         )
@@ -77,9 +104,11 @@ fun OmniChatApp() {
                     0 -> HomeScreen(
                         onOpenChat = { selectedTab = 1 }
                     )
+
                     1 -> ChatScreen()
                     2 -> AgentsScreen()
                     3 -> ToolsScreen()
+
                     4 -> SettingsScreen(
                         darkMode = darkMode,
                         onThemeChange = { darkMode = it }
@@ -113,6 +142,7 @@ private fun AppHeader() {
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold
             )
+
             Text(
                 text = "AI • One interface, many minds",
                 style = MaterialTheme.typography.labelSmall,
@@ -123,7 +153,10 @@ private fun AppHeader() {
         Spacer(modifier = Modifier.weight(1f))
 
         IconButton(onClick = {}) {
-            Icon(Icons.Default.AccountCircle, contentDescription = "Profile")
+            Icon(
+                Icons.Default.AccountCircle,
+                contentDescription = "Profile"
+            )
         }
     }
 }
@@ -156,7 +189,8 @@ private fun HomeScreen(onOpenChat: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                    containerColor =
+                        MaterialTheme.colorScheme.primaryContainer
                 )
             ) {
                 Column(modifier = Modifier.padding(22.dp)) {
@@ -258,6 +292,7 @@ private fun FeatureCard(
 
             Column {
                 Text(title, fontWeight = FontWeight.SemiBold)
+
                 Text(
                     description,
                     style = MaterialTheme.typography.bodySmall,
@@ -301,10 +336,14 @@ private fun ChatScreen() {
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary
                 )
+
                 Spacer(modifier = Modifier.height(8.dp))
+
                 Text("No AI provider connected yet.")
+
                 Text(
-                    "Provider setup and live AI responses will be added in a later step.",
+                    "Provider setup is available in Settings. " +
+                        "Live AI responses will be added in the next step.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -321,7 +360,7 @@ private fun ChatScreen() {
             shape = RoundedCornerShape(18.dp),
             trailingIcon = {
                 IconButton(
-                    onClick = { },
+                    onClick = {},
                     enabled = message.isNotBlank()
                 ) {
                     Icon(
@@ -394,53 +433,298 @@ private fun SettingsScreen(
     darkMode: Boolean,
     onThemeChange: (Boolean) -> Unit
 ) {
-    Column(
+    val context = LocalContext.current
+
+    var selectedProvider by remember {
+        mutableStateOf("openai")
+    }
+
+    var apiKey by remember {
+        mutableStateOf("")
+    }
+
+    var expanded by remember {
+        mutableStateOf(false)
+    }
+
+    var saved by remember(selectedProvider) {
+        mutableStateOf(
+            SecureApiKeyStore.hasKey(context, selectedProvider)
+        )
+    }
+
+    var statusMessage by remember {
+        mutableStateOf("")
+    }
+
+    val providerName = aiProviders
+        .first { it.id == selectedProvider }
+        .name
+
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(20.dp)
+            .padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            "Settings",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
-        )
+        item {
+            Spacer(modifier = Modifier.height(4.dp))
 
-        Spacer(modifier = Modifier.height(20.dp))
+            Text(
+                "Settings",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(18.dp),
-                verticalAlignment = Alignment.CenterVertically
+        item {
+            Text(
+                "AI Provider Setup",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+
+            Text(
+                "Connect your AI provider using an API key.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp)
             ) {
-                Icon(
-                    Icons.Default.DarkMode,
-                    contentDescription = null
-                )
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        "Select Provider",
+                        fontWeight = FontWeight.SemiBold
+                    )
 
-                Spacer(modifier = Modifier.width(14.dp))
+                    Box {
+                        OutlinedButton(
+                            onClick = { expanded = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                providerName,
+                                modifier = Modifier.weight(1f)
+                            )
 
-                Text(
-                    "Dark mode",
-                    modifier = Modifier.weight(1f)
-                )
+                            Icon(
+                                Icons.Default.ArrowDropDown,
+                                contentDescription = "Select provider"
+                            )
+                        }
 
-                Switch(
-                    checked = darkMode,
-                    onCheckedChange = onThemeChange
-                )
+                        DropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            aiProviders.forEach { provider ->
+                                DropdownMenuItem(
+                                    text = { Text(provider.name) },
+                                    onClick = {
+                                        selectedProvider = provider.id
+                                        apiKey = ""
+                                        statusMessage = ""
+                                        expanded = false
+                                    },
+                                    leadingIcon = {
+                                        if (selectedProvider == provider.id) {
+                                            Icon(
+                                                Icons.Default.Check,
+                                                contentDescription = null
+                                            )
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = apiKey,
+                        onValueChange = {
+                            apiKey = it
+                            statusMessage = ""
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("API Key") },
+                        placeholder = {
+                            Text("Enter your $providerName API key")
+                        },
+                        visualTransformation =
+                            PasswordVisualTransformation(),
+                        singleLine = true
+                    )
+
+                    Button(
+                        onClick = {
+                            val result = SecureApiKeyStore.save(
+                                context,
+                                selectedProvider,
+                                apiKey.trim()
+                            )
+
+                            if (result) {
+                                saved = true
+                                apiKey = ""
+                                statusMessage =
+                                    "$providerName API key saved securely."
+                            } else {
+                                statusMessage =
+                                    "Could not save API key. Check the key and try again."
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = apiKey.isNotBlank()
+                    ) {
+                        Icon(
+                            Icons.Default.Save,
+                            contentDescription = null
+                        )
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Text("Save API Key")
+                    }
+
+                    if (saved) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            Text(
+                                "$providerName API key is saved",
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                val deleted = SecureApiKeyStore.delete(
+                                    context,
+                                    selectedProvider
+                                )
+
+                                if (deleted) {
+                                    saved = false
+                                    statusMessage =
+                                        "$providerName API key removed."
+                                } else {
+                                    statusMessage =
+                                        "Could not remove API key."
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = null
+                            )
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            Text("Remove API Key")
+                        }
+                    } else {
+                        Text(
+                            "No API key saved for $providerName.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+
+                    if (statusMessage.isNotBlank()) {
+                        Text(
+                            statusMessage,
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        "Security & Privacy",
+                        fontWeight = FontWeight.SemiBold
+                    )
 
-        Text(
-            "OmniChat AI • Version 0.1.0",
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+                    Text(
+                        "API keys are encrypted using Android Keystore " +
+                            "before being stored on this device.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Text(
+                        "Never share your API keys or commit them to GitHub.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.DarkMode,
+                        contentDescription = null
+                    )
+
+                    Spacer(modifier = Modifier.width(14.dp))
+
+                    Text(
+                        "Dark mode",
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Switch(
+                        checked = darkMode,
+                        onCheckedChange = onThemeChange
+                    )
+                }
+            }
+        }
+
+        item {
+            Text(
+                "OmniChat AI • Version 0.1.0",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+        }
     }
 }
