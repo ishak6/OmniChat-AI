@@ -211,9 +211,9 @@ private fun HomeScreen(onChat: () -> Unit) {
             key = { it.id }
         ) { conversation ->
             Card(
-                Modifier.fillMaxWidth(),
-                onClick = onChat
-            ) {
+    onClick = onChat,
+    modifier = Modifier.fillMaxWidth()
+) {
                 Column(Modifier.padding(14.dp)) {
                     Text(conversation.title, fontWeight = FontWeight.SemiBold)
                     Text(
