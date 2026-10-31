@@ -1454,6 +1454,46 @@ private fun ChatScreen() {
 
     // OpenRouter Free Models dialog
     if (showOpenRouterModels) {
+    // OpenRouter Free Models Scanner dialog
+    if (showOpenRouterModels) {
+        val scannerApiKey = selectedProfile?.let {
+            ApiProfileStore.getApiKey(context, it.id)
+        }.orEmpty()
+
+        AlertDialog(
+            onDismissRequest = {
+                showOpenRouterModels = false
+            },
+            title = {
+                Text("OpenRouter Free Model Scanner")
+            },
+            text = {
+                OpenRouterModelScanner(
+                    models = openRouterModels,
+                    apiKey = scannerApiKey,
+                    selectedModelId = selectedProfile?.model,
+                    loading = loadingOpenRouterModels,
+                    loadError = openRouterModelError,
+                    onRefresh = {
+                        loadOpenRouterModels()
+                    },
+                    onSelectModel = { model ->
+                        selectOpenRouterModel(model)
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showOpenRouterModels = false
+                    }
+                ) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
         AlertDialog(
             onDismissRequest = {
                 showOpenRouterModels = false
