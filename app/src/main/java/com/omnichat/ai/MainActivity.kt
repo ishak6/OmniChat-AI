@@ -15,8 +15,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -24,6 +25,9 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.UUID
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,41 +36,17 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private data class AppTab(
-    val title: String,
-    val icon: ImageVector
-)
-
-private data class AIProvider(
-    val id: String,
-    val name: String
-)
-
-private val aiProviders = listOf(
-    AIProvider("openai", "OpenAI"),
-    AIProvider("gemini", "Google Gemini"),
-    AIProvider("claude", "Anthropic Claude"),
-    AIProvider("deepseek", "DeepSeek"),
-    AIProvider("grok", "xAI Grok"),
-    AIProvider("mistral", "Mistral AI"),
-    AIProvider("openrouter", "OpenRouter"),
-    AIProvider("groq", "Groq"),
-    AIProvider("together", "Together AI"),
-    AIProvider("custom", "Custom Provider")
-)
+private enum class MainTab(val label: String) {
+    HOME("Home"),
+    CHAT("Chat"),
+    APIS("APIs"),
+    SETTINGS("Settings")
+}
 
 @Composable
 fun OmniChatApp() {
-    var selectedTab by remember { mutableStateOf(0) }
+    var tab by remember { mutableStateOf(MainTab.HOME) }
     var darkMode by remember { mutableStateOf(false) }
-
-    val tabs = listOf(
-        AppTab("Home", Icons.Default.Home),
-        AppTab("Chat", Icons.Default.Chat),
-        AppTab("Agents", Icons.Default.AutoAwesome),
-        AppTab("Tools", Icons.Default.Build),
-        AppTab("Settings", Icons.Default.Settings)
-    )
 
     MaterialTheme(
         colorScheme = if (darkMode) darkColorScheme() else lightColorScheme()
@@ -74,14 +54,22 @@ fun OmniChatApp() {
         Scaffold(
             bottomBar = {
                 NavigationBar {
-                    tabs.forEachIndexed { index, tab ->
+                    MainTab.values().forEach { item ->
                         NavigationBarItem(
-                            selected = selectedTab == index,
-                            onClick = { selectedTab = index },
+                            selected = tab == item,
+                            onClick = { tab = item },
                             icon = {
-                                Icon(tab.icon, contentDescription = tab.title)
+                                Icon(
+                                    when (item) {
+                                        MainTab.HOME -> Icons.Default.Home
+                                        MainTab.CHAT -> Icons.Default.Chat
+                                        MainTab.APIS -> Icons.Default.Key
+                                        MainTab.SETTINGS -> Icons.Default.Settings
+                                    },
+                                    contentDescription = item.label
+                                )
                             },
-                            label = { Text(tab.title) }
+                            label = { Text(item.label) }
                         )
                     }
                 }
@@ -95,20 +83,13 @@ fun OmniChatApp() {
             ) {
                 AppHeader()
 
-                when (selectedTab) {
-                    0 -> HomeScreen { selectedTab = 1 }
-                    1 -> ChatScreen()
-                    2 -> SimpleScreen(
-                        "AI Agents",
-                        "Your personal AI assistants will live here.",
-                        Icons.Default.Psychology
-                    )
-                    3 -> SimpleScreen(
-                        "AI Tools",
-                        "Coding, research, image and data tools will be added here.",
-                        Icons.Default.Build
-                    )
-                    4 -> SettingsScreen(
+                when (tab) {
+                    MainTab.HOME -> HomeScreen {
+                        tab = MainTab.CHAT
+                    }
+                    MainTab.CHAT -> ChatScreen()
+                    MainTab.APIS -> ApiDashboardScreen()
+                    MainTab.SETTINGS -> SettingsScreen(
                         darkMode = darkMode,
                         onThemeChange = { darkMode = it }
                     )
@@ -123,7 +104,7 @@ private fun AppHeader() {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 16.dp),
+            .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
@@ -134,65 +115,61 @@ private fun AppHeader() {
         )
         Spacer(Modifier.width(10.dp))
         Column {
-            Text("OmniChat", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text("OmniChat AI", fontSize = 21.sp, fontWeight = FontWeight.Bold)
             Text(
-                "AI • One interface, many minds",
+                "One interface, many minds",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Spacer(Modifier.weight(1f))
-        Icon(Icons.Default.AccountCircle, contentDescription = "Profile")
     }
 }
 
 @Composable
-private fun HomeScreen(onOpenChat: () -> Unit) {
+private fun HomeScreen(onChat: () -> Unit) {
+    val context = LocalContext.current
+    val profiles = remember { mutableStateListOf<ApiProfile>() }
+
+    LaunchedEffect(Unit) {
+        profiles.clear()
+        profiles.addAll(ApiProfileStore.getAll(context))
+    }
+
     LazyColumn(
         Modifier
             .fillMaxSize()
-            .padding(horizontal = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Spacer(Modifier.height(8.dp))
             Text(
                 "Your AI workspace",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                "What would you like to do today?",
+                "Manage your AI providers and conversations.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+
         item {
             Card(
                 Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
+                shape = RoundedCornerShape(22.dp)
             ) {
-                Column(Modifier.padding(22.dp)) {
+                Column(Modifier.padding(20.dp)) {
                     Icon(
-                        Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        modifier = Modifier.size(34.dp)
+                        Icons.Default.Chat,
+                        modifier = Modifier.size(34.dp),
+                        contentDescription = null
                     )
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        "Start a conversation",
-                        fontSize = 21.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "Talk to your AI models from one place.",
-                        Modifier.padding(top = 6.dp)
-                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text("Start a conversation", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text("Chat with your configured AI APIs.")
                     Button(
-                        onClick = onOpenChat,
-                        modifier = Modifier.padding(top = 16.dp)
+                        onClick = onChat,
+                        modifier = Modifier.padding(top = 12.dp)
                     ) {
                         Text("Open Chat")
                         Spacer(Modifier.width(8.dp))
@@ -201,61 +178,464 @@ private fun HomeScreen(onOpenChat: () -> Unit) {
                 }
             }
         }
+
         item {
-            FeatureCard(
-                Icons.Default.Psychology,
-                "AI Agents",
-                "Create assistants for different tasks."
-            )
+            Text("API Overview", style = MaterialTheme.typography.titleLarge)
         }
+
         item {
-            FeatureCard(
-                Icons.Default.Code,
-                "Coding Studio",
-                "Your future workspace for coding with AI."
-            )
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("Configured APIs", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "${profiles.size} profiles",
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+                    Text(
+                        "${profiles.count { it.enabled }} enabled",
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        "Default: ${profiles.firstOrNull { it.isDefault }?.name ?: "Not configured"}"
+                    )
+                }
+            }
         }
+
         item {
-            FeatureCard(
-                Icons.Default.Search,
-                "Deep Research",
-                "Research and organize information with AI."
-            )
+            Text("Recent conversations", style = MaterialTheme.typography.titleLarge)
+        }
+
+        items(
+            ChatHistoryStore.getAll(context).take(5),
+            key = { it.id }
+        ) { conversation ->
+            Card(
+                Modifier.fillMaxWidth(),
+                onClick = onChat
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    Text(conversation.title, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "${conversation.messages.size} messages • ${conversation.providerName}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun FeatureCard(
-    icon: ImageVector,
-    title: String,
-    description: String
-) {
-    Card(
-        Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp)
-    ) {
+private fun ApiDashboardScreen() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val clipboard = LocalClipboardManager.current
+
+    var refresh by remember { mutableIntStateOf(0) }
+    var showEditor by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<ApiProfile?>(null) }
+    var showImport by remember { mutableStateOf(false) }
+    var importText by remember { mutableStateOf("") }
+    var status by remember { mutableStateOf("") }
+    var testingId by remember { mutableStateOf<String?>(null) }
+
+    val profiles = remember(refresh) {
+        ApiProfileStore.getAll(context)
+    }
+
+    Column(Modifier.fillMaxSize()) {
         Row(
-            Modifier.padding(18.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(30.dp)
-            )
-            Spacer(Modifier.width(16.dp))
-            Column {
-                Text(title, fontWeight = FontWeight.SemiBold)
+            Column(Modifier.weight(1f)) {
                 Text(
-                    description,
-                    style = MaterialTheme.typography.bodySmall,
+                    "API Management",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "${profiles.size} configured profiles",
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
+            IconButton(onClick = { refresh++ }) {
+                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+            }
+        }
+
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = {
+                    editing = null
+                    showEditor = true
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null)
+                Text(" Add API")
+            }
+
+            OutlinedButton(
+                onClick = { showImport = true },
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Default.Upload, contentDescription = null)
+                Text(" Import")
+            }
+
+            OutlinedButton(
+                onClick = {
+                    val export = JSONArray()
+                    profiles.forEach { profile ->
+                        export.put(
+                            JSONObject().apply {
+                                put("name", profile.name)
+                                put("provider", profile.provider)
+                                put("baseUrl", profile.baseUrl)
+                                put("model", profile.model)
+                                put("enabled", profile.enabled)
+                            }
+                        )
+                    }
+                    clipboard.setText(AnnotatedString(export.toString(2)))
+                    status = "Profile metadata copied. API keys are not included."
+                }
+            ) {
+                Icon(Icons.Default.ContentCopy, contentDescription = "Export")
+            }
+        }
+
+        if (status.isNotBlank()) {
+            Text(
+                status,
+                Modifier.padding(16.dp),
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        if (profiles.isEmpty()) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("No API profiles yet. Tap Add API to get started.")
+            }
+        } else {
+            LazyColumn(
+                Modifier
+                    .fillMaxSize()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(profiles, key = { it.id }) { profile ->
+                    ApiProfileCard(
+                        profile = profile,
+                        testing = testingId == profile.id,
+                        onEnabled = { enabled ->
+                            ApiProfileStore.setEnabled(
+                                context,
+                                profile.id,
+                                enabled
+                            )
+                            refresh++
+                        },
+                        onDefault = {
+                            ApiProfileStore.setDefault(context, profile.id)
+                            refresh++
+                        },
+                        onEdit = {
+                            editing = profile
+                            showEditor = true
+                        },
+                        onDelete = {
+                            ApiProfileStore.delete(context, profile.id)
+                            refresh++
+                        },
+                        onTest = {
+                            val key = ApiProfileStore.getApiKey(context, profile.id)
+                            if (key.isNullOrBlank()) {
+                                status = "API key missing for ${profile.name}."
+                            } else {
+                                testingId = profile.id
+                                status = "Testing ${profile.name}..."
+
+                                scope.launch {
+                                    try {
+                                        val response = withContext(Dispatchers.IO) {
+                                            CustomApiChatClient.sendMessage(
+                                                key,
+                                                CustomApiConfig(
+                                                    profile.baseUrl,
+                                                    profile.model
+                                                ),
+                                                listOf(
+                                                    OpenAiMessage(
+                                                        "user",
+                                                        "Reply with OK."
+                                                    )
+                                                )
+                                            )
+                                        }
+                                        status = "Connection successful: ${response.take(100)}"
+                                    } catch (e: Exception) {
+                                        status = "Connection failed: ${e.message}"
+                                    } finally {
+                                        testingId = null
+                                    }
+                                }
+                            }
+                        }
+                    )
+                }
+            }
         }
     }
+
+    if (showEditor) {
+        ApiProfileEditor(
+            profile = editing,
+            onDismiss = { showEditor = false },
+            onSave = { name, provider, url, model, key ->
+                val result = if (editing == null) {
+                    ApiProfileStore.create(
+                        context, name, provider, url, model, key
+                    ) != null
+                } else {
+                    ApiProfileStore.save(
+                        context,
+                        editing!!.copy(
+                            name = name,
+                            provider = provider,
+                            baseUrl = url,
+                            model = model
+                        ),
+                        key.ifBlank { null }
+                    )
+                }
+
+                status = if (result) "API profile saved." else
+                    "Could not save. Check fields and API key."
+                showEditor = false
+                refresh++
+            }
+        )
+    }
+
+    if (showImport) {
+        AlertDialog(
+            onDismissRequest = { showImport = false },
+            title = { Text("Import API Profiles") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Paste a JSON array. Each entry must include name, baseUrl, model and apiKey."
+                    )
+                    OutlinedTextField(
+                        value = importText,
+                        onValueChange = { importText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 5,
+                        maxLines = 9,
+                        label = { Text("JSON") }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val result = ApiProfileStore.importJson(context, importText)
+                        status = "Imported: ${result.imported}, skipped: ${result.skipped}. " +
+                            result.errors.take(2).joinToString(" ")
+                        importText = ""
+                        showImport = false
+                        refresh++
+                    }
+                ) { Text("Import") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showImport = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun ApiProfileCard(
+    profile: ApiProfile,
+    testing: Boolean,
+    onEnabled: (Boolean) -> Unit,
+    onDefault: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onTest: () -> Unit
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(
+            Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(profile.name, fontWeight = FontWeight.Bold)
+                    Text(
+                        "${profile.provider} • ${profile.model}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                Switch(
+                    checked = profile.enabled,
+                    onCheckedChange = onEnabled
+                )
+            }
+
+            Text(
+                profile.baseUrl,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (profile.isDefault) {
+                    AssistChip(
+                        onClick = {},
+                        label = { Text("Default API") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Star, contentDescription = null)
+                        }
+                    )
+                } else {
+                    TextButton(
+                        onClick = onDefault,
+                        enabled = profile.enabled
+                    ) {
+                        Text("Set Default")
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onEdit) {
+                    Icon(Icons.Default.Edit, contentDescription = null)
+                    Text("Edit")
+                }
+                TextButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, contentDescription = null)
+                }
+            }
+
+            OutlinedButton(
+                onClick = onTest,
+                enabled = profile.enabled && !testing,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (testing) {
+                    CircularProgressIndicator(
+                        Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(Icons.Default.NetworkCheck, contentDescription = null)
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(if (testing) "Testing..." else "Test Connection")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ApiProfileEditor(
+    profile: ApiProfile?,
+    onDismiss: () -> Unit,
+    onSave: (String, String, String, String, String) -> Unit
+) {
+    var name by remember { mutableStateOf(profile?.name ?: "") }
+    var provider by remember { mutableStateOf(profile?.provider ?: "Custom") }
+    var url by remember { mutableStateOf(profile?.baseUrl ?: "") }
+    var model by remember { mutableStateOf(profile?.model ?: "") }
+    var key by remember { mutableStateOf("") }
+    var showKey by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (profile == null) "Add API Profile" else "Edit API Profile") },
+        text = {
+            Column(
+                Modifier.heightIn(max = 520.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp)
+            ) {
+                OutlinedTextField(
+                    name, { name = it },
+                    label = { Text("Profile name") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    provider, { provider = it },
+                    label = { Text("Provider name") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    url, { url = it },
+                    label = { Text("API Base URL") },
+                    placeholder = { Text("https://api.example.com/v1") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    model, { model = it },
+                    label = { Text("Model ID") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    key, { key = it },
+                    label = {
+                        Text(if (profile == null) "API Key" else "New API Key (optional)")
+                    },
+                    visualTransformation = if (showKey) {
+                        androidx.compose.ui.text.input.VisualTransformation.None
+                    } else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showKey = !showKey }) {
+                            Icon(
+                                if (showKey) Icons.Default.VisibilityOff
+                                else Icons.Default.Visibility,
+                                contentDescription = "Toggle key visibility"
+                            )
+                        }
+                    },
+                    singleLine = true
+                )
+                Text(
+                    "Compatible with OpenAI-style /chat/completions endpoints.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = name.isNotBlank() && url.isNotBlank() &&
+                    model.isNotBlank() && (profile != null || key.isNotBlank()),
+                onClick = {
+                    onSave(name.trim(), provider.trim(), url.trim().trimEnd('/'),
+                        model.trim(), key.trim())
+                }
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 @Composable
@@ -263,156 +643,149 @@ private fun ChatScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var selectedProvider by remember { mutableStateOf("openrouter") }
-    var selectedModel by remember { mutableStateOf("openrouter/free") }
-    var providerExpanded by remember { mutableStateOf(false) }
-    var modelExpanded by remember { mutableStateOf(false) }
-    var search by remember { mutableStateOf("") }
-    var freeOnly by remember { mutableStateOf(true) }
-
-    var models by remember {
-        mutableStateOf(
-            listOf(
-                OpenRouterModel(
-                    "openrouter/free",
-                    "Auto Select Free Model",
-                    true
-                )
-            )
-        )
+    var refresh by remember { mutableIntStateOf(0) }
+    var selectedProfileId by remember {
+        mutableStateOf(ApiProfileStore.getDefault(context)?.id)
     }
+    var conversationId by remember { mutableStateOf<String?>(null) }
+    var messages by remember { mutableStateOf(emptyList<OpenAiMessage>()) }
+    var input by remember { mutableStateOf("") }
+    var sending by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf("") }
+    var showProfiles by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
+    var showMemory by remember { mutableStateOf(false) }
+    var memoryMode by remember { mutableStateOf(MemoryTransferMode.FULL_HISTORY) }
 
-    var loadingModels by remember { mutableStateOf(false) }
-    var modelError by remember { mutableStateOf("") }
-
-    var message by remember { mutableStateOf("") }
-    var isSending by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf("") }
-
-    var messages by remember {
-        mutableStateOf(
-            listOf(
-                OpenAiMessage(
-                    "assistant",
-                    "Welcome to OmniChat AI. Select a provider and model."
-                )
-            )
-        )
-    }
-
-    val providerName = when (selectedProvider) {
-        "openai" -> "OpenAI"
-        "openrouter" -> "OpenRouter"
-        else -> "Custom Provider"
-    }
-
-    fun loadModels() {
-        if (loadingModels) return
-        loadingModels = true
-        modelError = ""
-
-        scope.launch {
-            try {
-                val result = withContext(Dispatchers.IO) {
-                    OpenRouterModelsClient.getModels()
-                }
-                models = result
-                if (models.none { it.id == selectedModel }) {
-                    selectedModel = "openrouter/free"
-                }
-            } catch (e: Exception) {
-                modelError = e.message ?: "Could not load models."
-            } finally {
-                loadingModels = false
-            }
+    val profiles = remember(refresh) {
+        ApiProfileStore.getAll(context).filter {
+            it.enabled && ApiProfileStore.hasApiKey(context, it.id)
         }
     }
 
-    LaunchedEffect(Unit) {
-        loadModels()
+    val selectedProfile = profiles.firstOrNull {
+        it.id == selectedProfileId
+    } ?: profiles.firstOrNull()
+
+    LaunchedEffect(selectedProfile?.id) {
+        if (selectedProfile != null) {
+            selectedProfileId = selectedProfile.id
+        }
     }
 
-    val visibleModels = models.filter { model ->
-        (!freeOnly || model.isFree) &&
-            (
-                model.name.contains(search, ignoreCase = true) ||
-                    model.id.contains(search, ignoreCase = true)
-                )
+    fun newConversation() {
+        val profile = selectedProfile
+        val conversation = ChatHistoryStore.create(
+            context,
+            providerName = profile?.provider ?: "",
+            profileId = profile?.id,
+            model = profile?.model ?: ""
+        )
+        conversationId = conversation?.id
+        messages = emptyList()
+        error = ""
     }
 
-    val sendMessage: () -> Unit = {
-        val userText = message.trim()
+    fun openConversation(id: String) {
+        val conversation = ChatHistoryStore.get(context, id) ?: return
+        conversationId = id
+        messages = conversation.messages
+        if (conversation.profileId != null &&
+            profiles.any { it.id == conversation.profileId }
+        ) {
+            selectedProfileId = conversation.profileId
+        }
+        error = ""
+    }
 
-        if (userText.isNotBlank() && !isSending) {
-            val key = SecureApiKeyStore.get(context, selectedProvider)
+    fun send() {
+        val text = input.trim()
+        val profile = selectedProfile
 
-            if (key.isNullOrBlank()) {
-                errorMessage =
-                    "No API key saved for $providerName. Open Settings and save it first."
-            } else {
-                val config = when (selectedProvider) {
-                    "openrouter" -> CustomApiConfig(
-                        "https://openrouter.ai/api/v1",
-                        selectedModel
+        if (text.isBlank() || sending) return
+
+        if (profile == null) {
+            error = "No enabled API profile with a saved key. Add one in APIs."
+            return
+        }
+
+        val key = ApiProfileStore.getApiKey(context, profile.id)
+        if (key.isNullOrBlank()) {
+            error = "API key not found. Check API settings."
+            return
+        }
+
+        var id = conversationId
+        if (id == null) {
+            val created = ChatHistoryStore.create(
+                context,
+                text,
+                profile.provider,
+                profile.id,
+                profile.model
+            )
+            id = created?.id
+            conversationId = id
+        }
+
+        val currentId = id ?: run {
+            error = "Could not create conversation."
+            return
+        }
+
+        val conversation = ChatHistoryStore.get(context, currentId)
+        val requestHistory = if (conversation == null) {
+            messages
+        } else {
+            ChatHistoryStore.buildContextForAnotherAi(
+                conversation,
+                memoryMode
+            )
+        }
+
+        val requestMessages = requestHistory + OpenAiMessage("user", text)
+
+        input = ""
+        sending = true
+        error = ""
+
+        messages = messages + OpenAiMessage("user", text)
+
+        scope.launch {
+            try {
+                val answer = withContext(Dispatchers.IO) {
+                    CustomApiChatClient.sendMessage(
+                        key,
+                        CustomApiConfig(profile.baseUrl, profile.model),
+                        requestMessages
                     )
-                    "custom" -> CustomApiConfigStore.get(context)
-                    else -> null
                 }
 
-                if (selectedProvider != "openai" &&
-                    (
-                        config == null ||
-                            config.baseUrl.isBlank() ||
-                            config.model.isBlank()
-                        )
-                ) {
-                    errorMessage = "Configure the API URL and model in Settings."
-                } else {
-                    message = ""
-                    errorMessage = ""
-                    isSending = true
+                val assistantMessage = OpenAiMessage("assistant", answer)
+                messages = messages + assistantMessage
 
-                    val requestMessages = messages +
-                        OpenAiMessage("user", userText)
-                    messages = requestMessages
-
-                    val providerSnapshot = selectedProvider
-                    val configSnapshot = config
-                    val modelSnapshot = selectedModel
-
-                    scope.launch {
-                        try {
-                            val answer = withContext(Dispatchers.IO) {
-                                when (providerSnapshot) {
-                                    "openai" -> OpenAiChatClient.sendMessage(
-                                        key,
-                                        requestMessages
-                                    )
-                                    "openrouter" -> CustomApiChatClient.sendMessage(
-                                        key,
-                                        configSnapshot!!,
-                                        requestMessages
-                                    )
-                                    else -> CustomApiChatClient.sendMessage(
-                                        key,
-                                        configSnapshot!!,
-                                        requestMessages
-                                    )
-                                }
-                            }
-
-                            messages = messages + OpenAiMessage(
-                                "assistant",
-                                answer
-                            )
-                        } catch (e: Exception) {
-                            errorMessage = e.message
-                                ?: "Something went wrong. Please try again."
-                        } finally {
-                            isSending = false
-                        }
-                    }
-                }
+                ChatHistoryStore.addMessage(
+                    context,
+                    currentId,
+                    OpenAiMessage("user", text)
+                )
+                ChatHistoryStore.addMessage(
+                    context,
+                    currentId,
+                    assistantMessage
+                )
+                ChatHistoryStore.updateAi(
+                    context,
+                    currentId,
+                    profile.provider,
+                    profile.id,
+                    profile.model
+                )
+                refresh++
+            } catch (e: Exception) {
+                error = e.message ?: "Request failed."
+            } finally {
+                sending = false
             }
         }
     }
@@ -420,12 +793,10 @@ private fun ChatScreen() {
     Column(
         Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 14.dp)
     ) {
         Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
+            Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
@@ -435,290 +806,274 @@ private fun ChatScreen() {
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    if (selectedProvider == "openrouter") {
-                        "OpenRouter • $selectedModel"
-                    } else if (selectedProvider == "custom") {
-                        "Custom • ${CustomApiConfigStore.get(context)?.model ?: "Not configured"}"
-                    } else {
-                        "OpenAI • gpt-4o-mini"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    selectedProfile?.let { "${it.name} • ${it.model}" }
+                        ?: "No API selected",
+                    style = MaterialTheme.typography.bodySmall
                 )
             }
 
-            Box {
-                OutlinedButton(
-                    onClick = { providerExpanded = true },
-                    enabled = !isSending
-                ) {
-                    Text(providerName)
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                }
-                DropdownMenu(
-                    expanded = providerExpanded,
-                    onDismissRequest = { providerExpanded = false }
-                ) {
-                    listOf(
-                        "openai" to "OpenAI",
-                        "openrouter" to "OpenRouter",
-                        "custom" to "Custom Provider"
-                    ).forEach { (id, name) ->
-                        DropdownMenuItem(
-                            text = { Text(name) },
-                            onClick = {
-                                selectedProvider = id
-                                providerExpanded = false
-                                errorMessage = ""
-                            }
-                        )
-                    }
-                }
+            IconButton(onClick = { showHistory = true }) {
+                Icon(Icons.Default.History, contentDescription = "History")
             }
-
+            IconButton(onClick = { showMemory = true }) {
+                Icon(Icons.Default.Memory, contentDescription = "Memory")
+            }
             IconButton(
-                onClick = {
-                    if (!isSending) {
-                        messages = listOf(
-                            OpenAiMessage(
-                                "assistant",
-                                "New conversation started. How can I help you?"
-                            )
-                        )
-                        errorMessage = ""
-                    }
-                },
-                enabled = !isSending
+                onClick = { newConversation() },
+                enabled = !sending
             ) {
                 Icon(Icons.Default.Add, contentDescription = "New chat")
             }
         }
 
-        if (selectedProvider == "openrouter") {
-            Card(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp)
-            ) {
-                Column(
-                    Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "Select AI Model",
-                            modifier = Modifier.weight(1f),
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        TextButton(
-                            onClick = { loadModels() },
-                            enabled = !loadingModels
-                        ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null)
-                            Text("Refresh")
-                        }
-                    }
-
-                    OutlinedButton(
-                        onClick = { modelExpanded = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !loadingModels && models.isNotEmpty()
-                    ) {
-                        Text(
-                            models.firstOrNull { it.id == selectedModel }?.name
-                                ?: selectedModel,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                    }
-
-                    DropdownMenu(
-                        expanded = modelExpanded,
-                        onDismissRequest = { modelExpanded = false }
-                    ) {
-                        Column(
-                            Modifier
-                                .widthIn(min = 280.dp, max = 340.dp)
-                                .heightIn(max = 420.dp)
-                                .padding(8.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = search,
-                                onValueChange = { search = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                                label = { Text("Search models") },
-                                leadingIcon = {
-                                    Icon(Icons.Default.Search, contentDescription = null)
-                                }
-                            )
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = freeOnly,
-                                    onCheckedChange = { freeOnly = it }
-                                )
-                                Text("Free models only")
-                            }
-
-                            HorizontalDivider()
-
-                            LazyColumn(
-                                Modifier.heightIn(max = 300.dp)
-                            ) {
-                                items(visibleModels) { model ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Column {
-                                                Text(
-                                                    model.name,
-                                                    fontWeight = FontWeight.Medium
-                                                )
-                                                Text(
-                                                    model.id,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                                if (model.isFree) {
-                                                    Text(
-                                                        "FREE",
-                                                        color = MaterialTheme.colorScheme.primary,
-                                                        style = MaterialTheme.typography.labelSmall
-                                                    )
-                                                }
-                                            }
-                                        },
-                                        onClick = {
-                                            selectedModel = model.id
-                                            modelExpanded = false
-                                            errorMessage = ""
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    if (loadingModels) {
-                        LinearProgressIndicator(Modifier.fillMaxWidth())
-                        Text("Loading available models...")
-                    }
-
-                    if (modelError.isNotBlank()) {
-                        Text(
-                            modelError,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-
-                    Text(
-                        "${models.size} chat models loaded",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
+        OutlinedButton(
+            onClick = { showProfiles = true },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !sending
+        ) {
+            Icon(Icons.Default.SwapHoriz, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("Switch AI: ${selectedProfile?.name ?: "Select API"}")
+            Spacer(Modifier.weight(1f))
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
         }
+
+        Text(
+            "Memory: ${memoryMode.name.replace('_', ' ')}",
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(vertical = 5.dp)
+        )
 
         HorizontalDivider()
 
         LazyColumn(
             Modifier
                 .weight(1f)
-                .fillMaxWidth(),
-            contentPadding = PaddingValues(vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .fillMaxWidth()
+                .padding(vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(messages) { chatMessage ->
-                ChatMessageBubble(chatMessage)
+            if (messages.isEmpty()) {
+                item {
+                    Text(
+                        "Start a new conversation. Your messages will be saved on this device.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
             }
 
-            if (isSending) {
+            items(messages) { message ->
+                ChatMessageBubble(message)
+            }
+
+            if (sending) {
                 item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(
-                            Modifier.size(20.dp),
+                            Modifier.size(18.dp),
                             strokeWidth = 2.dp
                         )
                         Spacer(Modifier.width(10.dp))
-                        Text("OmniChat is thinking...")
+                        Text("AI is responding...")
                     }
                 }
             }
         }
 
-        if (errorMessage.isNotBlank()) {
-            Card(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
-                )
-            ) {
-                Text(
-                    errorMessage,
-                    Modifier.padding(12.dp),
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
+        if (error.isNotBlank()) {
+            Text(
+                error,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(vertical = 5.dp)
+            )
         }
 
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(bottom = 12.dp),
+                .padding(bottom = 10.dp),
             verticalAlignment = Alignment.Bottom
         ) {
             OutlinedTextField(
-                value = message,
-                onValueChange = { message = it },
+                value = input,
+                onValueChange = { input = it },
                 modifier = Modifier.weight(1f),
                 placeholder = { Text("Message OmniChat...") },
-                shape = RoundedCornerShape(22.dp),
                 maxLines = 5,
-                enabled = !isSending
+                enabled = !sending
             )
             Spacer(Modifier.width(8.dp))
             FilledIconButton(
-                onClick = sendMessage,
-                enabled = message.isNotBlank() && !isSending,
-                modifier = Modifier.size(52.dp)
+                onClick = { send() },
+                enabled = input.isNotBlank() && !sending
             ) {
-                Icon(Icons.Default.Send, contentDescription = "Send message")
+                Icon(Icons.Default.Send, contentDescription = "Send")
             }
         }
+    }
+
+    if (showProfiles) {
+        AlertDialog(
+            onDismissRequest = { showProfiles = false },
+            title = { Text("Choose an AI") },
+            text = {
+                LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                    items(profiles, key = { it.id }) { profile ->
+                        TextButton(
+                            onClick = {
+                                selectedProfileId = profile.id
+                                conversationId?.let { id ->
+                                    ChatHistoryStore.updateAi(
+                                        context, id, profile.provider,
+                                        profile.id, profile.model
+                                    )
+                                }
+                                showProfiles = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(profile.name, fontWeight = FontWeight.SemiBold)
+                                Text(profile.model, style = MaterialTheme.typography.bodySmall)
+                            }
+                            if (profile.id == selectedProfileId) {
+                                Icon(Icons.Default.Check, contentDescription = null)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showProfiles = false }) { Text("Close") }
+            }
+        )
+    }
+
+    if (showHistory) {
+        AlertDialog(
+            onDismissRequest = { showHistory = false },
+            title = { Text("Chat History") },
+            text = {
+                val history = ChatHistoryStore.getAll(context)
+                LazyColumn(Modifier.heightIn(max = 440.dp)) {
+                    if (history.isEmpty()) {
+                        item { Text("No saved conversations.") }
+                    }
+                    items(history, key = { it.id }) { conversation ->
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    openConversation(conversation.id)
+                                    showHistory = false
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Column(Modifier.fillMaxWidth()) {
+                                    Text(conversation.title, fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        "${conversation.messages.size} messages • ${conversation.providerName}",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                            IconButton(
+                                onClick = {
+                                    ChatHistoryStore.delete(context, conversation.id)
+                                    refresh++
+                                }
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete")
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showHistory = false }) { Text("Close") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        ChatHistoryStore.clearAll(context)
+                        if (conversationId != null) {
+                            conversationId = null
+                            messages = emptyList()
+                        }
+                        showHistory = false
+                    }
+                ) { Text("Clear All") }
+            }
+        )
+    }
+
+    if (showMemory) {
+        AlertDialog(
+            onDismissRequest = { showMemory = false },
+            title = { Text("Conversation Memory") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Choose what context to send when switching AI.")
+                    MemoryTransferMode.values().forEach { mode ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(
+                                selected = memoryMode == mode,
+                                onClick = { memoryMode = mode }
+                            )
+                            Column {
+                                Text(mode.name.replace('_', ' '))
+                                Text(
+                                    when (mode) {
+                                        MemoryTransferMode.FULL_HISTORY ->
+                                            "Send all previous messages."
+                                        MemoryTransferMode.SUMMARY ->
+                                            "Send a compact transcript excerpt. This is not AI-generated summarization."
+                                        MemoryTransferMode.SAVED_MEMORY ->
+                                            "Send the latest 10 user messages."
+                                    },
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        "Messages selected here are sent to the chosen API provider.",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showMemory = false }) { Text("Done") }
+            }
+        )
     }
 }
 
 @Composable
 private fun ChatMessageBubble(message: OpenAiMessage) {
-    val isUser = message.role == "user"
+    val user = message.role == "user"
 
     Row(
         Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
+        horizontalArrangement = if (user) Arrangement.End else Arrangement.Start
     ) {
         Card(
-            Modifier.widthIn(max = 320.dp),
+            Modifier.widthIn(max = 330.dp),
             shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(
-                containerColor = if (isUser) {
+                containerColor = if (user) {
                     MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant
-                }
+                } else MaterialTheme.colorScheme.surfaceVariant
             )
         ) {
-            Column(Modifier.padding(14.dp)) {
+            Column(Modifier.padding(13.dp)) {
                 Text(
-                    if (isUser) "You" else "OmniChat AI",
+                    if (user) "You" else "AI",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -731,83 +1086,22 @@ private fun ChatMessageBubble(message: OpenAiMessage) {
 }
 
 @Composable
-private fun SimpleScreen(
-    title: String,
-    description: String,
-    icon: ImageVector
-) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            modifier = Modifier.size(56.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
-        Spacer(Modifier.height(16.dp))
-        Text(
-            title,
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            description,
-            Modifier.padding(top = 8.dp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
 private fun SettingsScreen(
     darkMode: Boolean,
     onThemeChange: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    var selectedProvider by remember { mutableStateOf("openrouter") }
-    var apiKey by remember { mutableStateOf("") }
-    var expanded by remember { mutableStateOf(false) }
-
-    var saved by remember(selectedProvider) {
-        mutableStateOf(
-            SecureApiKeyStore.hasKey(context, selectedProvider)
-        )
+    val historyCount = remember {
+        ChatHistoryStore.getAll(context).size
     }
-
-    var statusMessage by remember { mutableStateOf("") }
-    var testingConnection by remember { mutableStateOf(false) }
-
-    var customBaseUrl by remember {
-        mutableStateOf(
-            CustomApiConfigStore.get(context)?.baseUrl ?: ""
-        )
-    }
-
-    var customModel by remember {
-        mutableStateOf(
-            CustomApiConfigStore.get(context)?.model ?: ""
-        )
-    }
-
-    val providerName = aiProviders.first {
-        it.id == selectedProvider
-    }.name
 
     LazyColumn(
         Modifier
             .fillMaxSize()
-            .padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Spacer(Modifier.height(4.dp))
             Text(
                 "Settings",
                 style = MaterialTheme.typography.headlineMedium,
@@ -816,324 +1110,13 @@ private fun SettingsScreen(
         }
 
         item {
-            Text(
-                "AI Provider Setup",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                "Connect your AI provider using an API key.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        item {
-            Card(
-                Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp)
-            ) {
-                Column(
-                    Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text("Select Provider", fontWeight = FontWeight.SemiBold)
-
-                    Box {
-                        OutlinedButton(
-                            onClick = { expanded = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(providerName, Modifier.weight(1f))
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                        }
-
-                        DropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false }
-                        ) {
-                            aiProviders.forEach { provider ->
-                                DropdownMenuItem(
-                                    text = { Text(provider.name) },
-                                    onClick = {
-                                        selectedProvider = provider.id
-                                        apiKey = ""
-                                        statusMessage = ""
-                                        expanded = false
-
-                                        if (provider.id == "custom") {
-                                            val config =
-                                                CustomApiConfigStore.get(context)
-                                            customBaseUrl = config?.baseUrl ?: ""
-                                            customModel = config?.model ?: ""
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    if (selectedProvider == "custom") {
-                        Text(
-                            "Custom API Configuration",
-                            fontWeight = FontWeight.SemiBold
-                        )
-
-                        OutlinedTextField(
-                            value = customBaseUrl,
-                            onValueChange = {
-                                customBaseUrl = it
-                                statusMessage = ""
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("API Base URL") },
-                            placeholder = { Text("https://api.example.com/v1") },
-                            singleLine = true
-                        )
-
-                        OutlinedTextField(
-                            value = customModel,
-                            onValueChange = {
-                                customModel = it
-                                statusMessage = ""
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("Model ID") },
-                            placeholder = { Text("your-model-name") },
-                            singleLine = true
-                        )
-
-                        Text(
-                            "Endpoint must support OpenAI-compatible /chat/completions.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        Button(
-                            onClick = {
-                                val result = CustomApiConfigStore.save(
-                                    context,
-                                    customBaseUrl.trim(),
-                                    customModel.trim()
-                                )
-                                statusMessage = if (result) {
-                                    "Custom API settings saved."
-                                } else {
-                                    "Enter a valid API URL and Model ID."
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = customBaseUrl.isNotBlank() &&
-                                customModel.isNotBlank()
-                        ) {
-                            Icon(Icons.Default.Save, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Save Custom API Settings")
-                        }
-                    }
-
-                    OutlinedTextField(
-                        value = apiKey,
-                        onValueChange = {
-                            apiKey = it
-                            statusMessage = ""
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("API Key") },
-                        placeholder = { Text("Enter your $providerName API key") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        singleLine = true
-                    )
-
-                    Button(
-                        onClick = {
-                            val result = SecureApiKeyStore.save(
-                                context,
-                                selectedProvider,
-                                apiKey.trim()
-                            )
-                            if (result) {
-                                saved = true
-                                apiKey = ""
-                                statusMessage =
-                                    "$providerName API key saved securely."
-                            } else {
-                                statusMessage = "Could not save API key."
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = apiKey.isNotBlank()
-                    ) {
-                        Icon(Icons.Default.Save, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Save API Key")
-                    }
-
-                    if (saved) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                "$providerName API key is saved",
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        if (selectedProvider == "custom" ||
-                            selectedProvider == "openrouter"
-                        ) {
-                            OutlinedButton(
-                                onClick = {
-                                    val key = SecureApiKeyStore.get(
-                                        context,
-                                        selectedProvider
-                                    )
-
-                                    val config = if (selectedProvider == "openrouter") {
-                                        CustomApiConfig(
-                                            "https://openrouter.ai/api/v1",
-                                            "openrouter/free"
-                                        )
-                                    } else {
-                                        CustomApiConfigStore.get(context)
-                                    }
-
-                                    if (key.isNullOrBlank() || config == null) {
-                                        statusMessage =
-                                            "Save the API key and configuration first."
-                                    } else {
-                                        testingConnection = true
-                                        statusMessage = "Testing connection..."
-
-                                        scope.launch {
-                                            try {
-                                                val response = withContext(Dispatchers.IO) {
-                                                    CustomApiChatClient.sendMessage(
-                                                        apiKey = key,
-                                                        config = config,
-                                                        messages = listOf(
-                                                            OpenAiMessage(
-                                                                "user",
-                                                                "Reply with OK."
-                                                            )
-                                                        )
-                                                    )
-                                                }
-                                                statusMessage =
-                                                    "Connection successful: ${response.take(120)}"
-                                            } catch (e: Exception) {
-                                                statusMessage =
-                                                    "Connection failed: ${e.message}"
-                                            } finally {
-                                                testingConnection = false
-                                            }
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !testingConnection
-                            ) {
-                                if (testingConnection) {
-                                    CircularProgressIndicator(
-                                        Modifier.size(18.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                } else {
-                                    Icon(
-                                        Icons.Default.NetworkCheck,
-                                        contentDescription = null
-                                    )
-                                }
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    if (testingConnection) "Testing..."
-                                    else "Test Connection"
-                                )
-                            }
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                val deleted = SecureApiKeyStore.delete(
-                                    context,
-                                    selectedProvider
-                                )
-                                if (deleted) {
-                                    saved = false
-                                    statusMessage = "$providerName API key removed."
-                                } else {
-                                    statusMessage = "Could not remove API key."
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Remove API Key")
-                        }
-                    } else {
-                        Text(
-                            "No API key saved for $providerName.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-
-                    if (statusMessage.isNotBlank()) {
-                        Text(
-                            statusMessage,
-                            color = if (statusMessage.startsWith("Connection failed")) {
-                                MaterialTheme.colorScheme.error
-                            } else {
-                                MaterialTheme.colorScheme.primary
-                            },
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
-            }
-        }
-
-        item {
-            Card(
-                Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp)
-            ) {
-                Column(
-                    Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text("Security & Privacy", fontWeight = FontWeight.SemiBold)
-                    Text(
-                        "API keys are encrypted using Android Keystore before being stored on this device.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        "Never share your API keys or commit them to GitHub.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-
-        item {
-            Card(
-                Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp)
-            ) {
+            Card(Modifier.fillMaxWidth()) {
                 Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp),
+                    Modifier.padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(Icons.Default.DarkMode, contentDescription = null)
-                    Spacer(Modifier.width(14.dp))
+                    Spacer(Modifier.width(12.dp))
                     Text("Dark mode", Modifier.weight(1f))
                     Switch(
                         checked = darkMode,
@@ -1144,10 +1127,38 @@ private fun SettingsScreen(
         }
 
         item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Security & Privacy", fontWeight = FontWeight.Bold)
+                    Text(
+                        "API keys are encrypted with Android Keystore. Profile exports exclude API keys."
+                    )
+                    Text(
+                        "Chat history is stored locally on this device. When you send a message, selected conversation context is transmitted to your chosen API provider."
+                    )
+                }
+            }
+        }
+
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("Local Data", fontWeight = FontWeight.Bold)
+                    Text("$historyCount saved conversations")
+                    Text(
+                        "Conversation history is not encrypted separately by this version."
+                    )
+                }
+            }
+        }
+
+        item {
             Text(
-                "OmniChat AI • Version 0.1.0",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 16.dp)
+                "OmniChat AI • Version 0.2.0",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
