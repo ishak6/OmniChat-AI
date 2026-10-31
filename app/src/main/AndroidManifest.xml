@@ -5,7 +5,7 @@
 
     <application
         android:allowBackup="true"
-        android:label="NovaRun"
+        android:label="OmniChat AI"
         android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
