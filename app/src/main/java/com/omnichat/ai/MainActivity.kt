@@ -1,3 +1,4 @@
+
 package com.omnichat.ai
 
 import android.os.Bundle
@@ -27,9 +28,7 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            OmniChatApp()
-        }
+        setContent { OmniChatApp() }
     }
 }
 
@@ -89,7 +88,7 @@ fun OmniChatApp() {
             }
         ) { padding ->
             Column(
-                modifier = Modifier
+                Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
                     .padding(padding)
@@ -97,14 +96,18 @@ fun OmniChatApp() {
                 AppHeader()
 
                 when (selectedTab) {
-                    0 -> HomeScreen(
-                        onOpenChat = { selectedTab = 1 }
-                    )
-
+                    0 -> HomeScreen { selectedTab = 1 }
                     1 -> ChatScreen()
-                    2 -> AgentsScreen()
-                    3 -> ToolsScreen()
-
+                    2 -> SimpleScreen(
+                        "AI Agents",
+                        "Your personal AI assistants will live here.",
+                        Icons.Default.Psychology
+                    )
+                    3 -> SimpleScreen(
+                        "AI Tools",
+                        "Coding, research, image and data tools will be added here.",
+                        Icons.Default.Build
+                    )
                     4 -> SettingsScreen(
                         darkMode = darkMode,
                         onThemeChange = { darkMode = it }
@@ -118,7 +121,7 @@ fun OmniChatApp() {
 @Composable
 private fun AppHeader() {
     Row(
-        modifier = Modifier
+        Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -129,60 +132,43 @@ private fun AppHeader() {
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(30.dp)
         )
-
         Spacer(Modifier.width(10.dp))
-
         Column {
-            Text(
-                "OmniChat",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
-            )
-
+            Text("OmniChat", fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Text(
                 "AI • One interface, many minds",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-
         Spacer(Modifier.weight(1f))
-
-        IconButton(onClick = {}) {
-            Icon(
-                Icons.Default.AccountCircle,
-                contentDescription = "Profile"
-            )
-        }
+        Icon(Icons.Default.AccountCircle, contentDescription = "Profile")
     }
 }
 
 @Composable
 private fun HomeScreen(onOpenChat: () -> Unit) {
     LazyColumn(
-        modifier = Modifier
+        Modifier
             .fillMaxSize()
             .padding(horizontal = 18.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
             Spacer(Modifier.height(8.dp))
-
             Text(
                 "Your AI workspace",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )
-
             Text(
                 "What would you like to do today?",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-
         item {
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer
@@ -192,46 +178,29 @@ private fun HomeScreen(onOpenChat: () -> Unit) {
                     Icon(
                         Icons.Default.AutoAwesome,
                         contentDescription = null,
-                        modifier = Modifier.size(34.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                        modifier = Modifier.size(34.dp)
                     )
-
                     Spacer(Modifier.height(12.dp))
-
                     Text(
                         "Start a conversation",
                         fontSize = 21.sp,
                         fontWeight = FontWeight.Bold
                     )
-
                     Text(
                         "Talk to your AI models from one place.",
-                        modifier = Modifier.padding(top = 6.dp)
+                        Modifier.padding(top = 6.dp)
                     )
-
                     Button(
                         onClick = onOpenChat,
                         modifier = Modifier.padding(top = 16.dp)
                     ) {
                         Text("Open Chat")
                         Spacer(Modifier.width(8.dp))
-                        Icon(
-                            Icons.Default.ArrowForward,
-                            contentDescription = null
-                        )
+                        Icon(Icons.Default.ArrowForward, contentDescription = null)
                     }
                 }
             }
         }
-
-        item {
-            Text(
-                "Explore OmniChat",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
         item {
             FeatureCard(
                 Icons.Default.Psychology,
@@ -239,7 +208,6 @@ private fun HomeScreen(onOpenChat: () -> Unit) {
                 "Create assistants for different tasks."
             )
         }
-
         item {
             FeatureCard(
                 Icons.Default.Code,
@@ -247,17 +215,12 @@ private fun HomeScreen(onOpenChat: () -> Unit) {
                 "Your future workspace for coding with AI."
             )
         }
-
         item {
             FeatureCard(
                 Icons.Default.Search,
                 "Deep Research",
                 "Research and organize information with AI."
             )
-        }
-
-        item {
-            Spacer(Modifier.height(12.dp))
         }
     }
 }
@@ -269,11 +232,11 @@ private fun FeatureCard(
     description: String
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp)
     ) {
         Row(
-            modifier = Modifier.padding(18.dp),
+            Modifier.padding(18.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -282,12 +245,9 @@ private fun FeatureCard(
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(30.dp)
             )
-
             Spacer(Modifier.width(16.dp))
-
             Column {
                 Text(title, fontWeight = FontWeight.SemiBold)
-
                 Text(
                     description,
                     style = MaterialTheme.typography.bodySmall,
@@ -303,8 +263,28 @@ private fun ChatScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var selectedProvider by remember { mutableStateOf("openai") }
-    var providerMenuExpanded by remember { mutableStateOf(false) }
+    var selectedProvider by remember { mutableStateOf("openrouter") }
+    var selectedModel by remember { mutableStateOf("openrouter/free") }
+    var providerExpanded by remember { mutableStateOf(false) }
+    var modelExpanded by remember { mutableStateOf(false) }
+    var search by remember { mutableStateOf("") }
+    var freeOnly by remember { mutableStateOf(true) }
+
+    var models by remember {
+        mutableStateOf(
+            listOf(
+                OpenRouterModel(
+                    "openrouter/free",
+                    "Auto Select Free Model",
+                    true
+                )
+            )
+        )
+    }
+
+    var loadingModels by remember { mutableStateOf(false) }
+    var modelError by remember { mutableStateOf("") }
+
     var message by remember { mutableStateOf("") }
     var isSending by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
@@ -314,72 +294,109 @@ private fun ChatScreen() {
             listOf(
                 OpenAiMessage(
                     "assistant",
-                    "Hello! Welcome to OmniChat AI. Select a provider and send a message."
+                    "Welcome to OmniChat AI. Select a provider and model."
                 )
             )
         )
     }
 
-    val activeProviderName = if (selectedProvider == "custom") {
-        "Custom Provider"
-    } else {
-        "OpenAI"
+    val providerName = when (selectedProvider) {
+        "openai" -> "OpenAI"
+        "openrouter" -> "OpenRouter"
+        else -> "Custom Provider"
+    }
+
+    fun loadModels() {
+        if (loadingModels) return
+        loadingModels = true
+        modelError = ""
+
+        scope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    OpenRouterModelsClient.getModels()
+                }
+                models = result
+                if (models.none { it.id == selectedModel }) {
+                    selectedModel = "openrouter/free"
+                }
+            } catch (e: Exception) {
+                modelError = e.message ?: "Could not load models."
+            } finally {
+                loadingModels = false
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        loadModels()
+    }
+
+    val visibleModels = models.filter { model ->
+        (!freeOnly || model.isFree) &&
+            (
+                model.name.contains(search, ignoreCase = true) ||
+                    model.id.contains(search, ignoreCase = true)
+                )
     }
 
     val sendMessage: () -> Unit = {
-        val userMessage = message.trim()
+        val userText = message.trim()
 
-        if (userMessage.isNotBlank() && !isSending) {
-            val apiKey = SecureApiKeyStore.get(
-                context,
-                selectedProvider
-            )
+        if (userText.isNotBlank() && !isSending) {
+            val key = SecureApiKeyStore.get(context, selectedProvider)
 
-            if (apiKey.isNullOrBlank()) {
+            if (key.isNullOrBlank()) {
                 errorMessage =
-                    "No API key saved for $activeProviderName. Open Settings and save it first."
+                    "No API key saved for $providerName. Open Settings and save it first."
             } else {
-                val customConfig = if (selectedProvider == "custom") {
-                    CustomApiConfigStore.get(context)
-                } else {
-                    null
+                val config = when (selectedProvider) {
+                    "openrouter" -> CustomApiConfig(
+                        "https://openrouter.ai/api/v1",
+                        selectedModel
+                    )
+                    "custom" -> CustomApiConfigStore.get(context)
+                    else -> null
                 }
 
-                if (
-                    selectedProvider == "custom" &&
+                if (selectedProvider != "openai" &&
                     (
-                        customConfig == null ||
-                            customConfig.baseUrl.isBlank() ||
-                            customConfig.model.isBlank()
+                        config == null ||
+                            config.baseUrl.isBlank() ||
+                            config.model.isBlank()
                         )
                 ) {
-                    errorMessage =
-                        "Custom API URL and Model ID are required. Configure them in Settings."
+                    errorMessage = "Configure the API URL and model in Settings."
                 } else {
                     message = ""
                     errorMessage = ""
                     isSending = true
 
-                    val requestMessages = messages + OpenAiMessage(
-                        "user",
-                        userMessage
-                    )
-
+                    val requestMessages = messages +
+                        OpenAiMessage("user", userText)
                     messages = requestMessages
+
+                    val providerSnapshot = selectedProvider
+                    val configSnapshot = config
+                    val modelSnapshot = selectedModel
 
                     scope.launch {
                         try {
                             val answer = withContext(Dispatchers.IO) {
-                                if (selectedProvider == "custom") {
-                                    CustomApiChatClient.sendMessage(
-                                        apiKey = apiKey,
-                                        config = customConfig!!,
-                                        messages = requestMessages
+                                when (providerSnapshot) {
+                                    "openai" -> OpenAiChatClient.sendMessage(
+                                        key,
+                                        requestMessages
                                     )
-                                } else {
-                                    OpenAiChatClient.sendMessage(
-                                        apiKey = apiKey,
-                                        messages = requestMessages
+                                    "openrouter" -> CustomApiChatClient.sendMessage(
+                                        key,
+                                        configSnapshot!!,
+                                        requestMessages
+                                    )
+                                    else -> CustomApiChatClient.sendMessage(
+                                        key,
+                                        configSnapshot!!,
+                                        requestMessages
                                     )
                                 }
                             }
@@ -401,12 +418,12 @@ private fun ChatScreen() {
     }
 
     Column(
-        modifier = Modifier
+        Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp)
     ) {
         Row(
-            modifier = Modifier
+            Modifier
                 .fillMaxWidth()
                 .padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -417,10 +434,11 @@ private fun ChatScreen() {
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold
                 )
-
                 Text(
-                    if (selectedProvider == "custom") {
-                        "Custom • ${CustomApiConfigStore.get(context)?.model ?: "Model not configured"}"
+                    if (selectedProvider == "openrouter") {
+                        "OpenRouter • $selectedModel"
+                    } else if (selectedProvider == "custom") {
+                        "Custom • ${CustomApiConfigStore.get(context)?.model ?: "Not configured"}"
                     } else {
                         "OpenAI • gpt-4o-mini"
                     },
@@ -431,37 +449,30 @@ private fun ChatScreen() {
 
             Box {
                 OutlinedButton(
-                    onClick = { providerMenuExpanded = true },
+                    onClick = { providerExpanded = true },
                     enabled = !isSending
                 ) {
-                    Text(activeProviderName)
-                    Icon(
-                        Icons.Default.ArrowDropDown,
-                        contentDescription = "Choose provider"
-                    )
+                    Text(providerName)
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
                 }
-
                 DropdownMenu(
-                    expanded = providerMenuExpanded,
-                    onDismissRequest = { providerMenuExpanded = false }
+                    expanded = providerExpanded,
+                    onDismissRequest = { providerExpanded = false }
                 ) {
-                    DropdownMenuItem(
-                        text = { Text("OpenAI") },
-                        onClick = {
-                            selectedProvider = "openai"
-                            providerMenuExpanded = false
-                            errorMessage = ""
-                        }
-                    )
-
-                    DropdownMenuItem(
-                        text = { Text("Custom Provider") },
-                        onClick = {
-                            selectedProvider = "custom"
-                            providerMenuExpanded = false
-                            errorMessage = ""
-                        }
-                    )
+                    listOf(
+                        "openai" to "OpenAI",
+                        "openrouter" to "OpenRouter",
+                        "custom" to "Custom Provider"
+                    ).forEach { (id, name) ->
+                        DropdownMenuItem(
+                            text = { Text(name) },
+                            onClick = {
+                                selectedProvider = id
+                                providerExpanded = false
+                                errorMessage = ""
+                            }
+                        )
+                    }
                 }
             }
 
@@ -479,17 +490,145 @@ private fun ChatScreen() {
                 },
                 enabled = !isSending
             ) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = "New chat"
-                )
+                Icon(Icons.Default.Add, contentDescription = "New chat")
+            }
+        }
+
+        if (selectedProvider == "openrouter") {
+            Card(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+            ) {
+                Column(
+                    Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Select AI Model",
+                            modifier = Modifier.weight(1f),
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        TextButton(
+                            onClick = { loadModels() },
+                            enabled = !loadingModels
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null)
+                            Text("Refresh")
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = { modelExpanded = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !loadingModels && models.isNotEmpty()
+                    ) {
+                        Text(
+                            models.firstOrNull { it.id == selectedModel }?.name
+                                ?: selectedModel,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                    }
+
+                    DropdownMenu(
+                        expanded = modelExpanded,
+                        onDismissRequest = { modelExpanded = false }
+                    ) {
+                        Column(
+                            Modifier
+                                .widthIn(min = 280.dp, max = 340.dp)
+                                .heightIn(max = 420.dp)
+                                .padding(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = search,
+                                onValueChange = { search = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                label = { Text("Search models") },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Search, contentDescription = null)
+                                }
+                            )
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = freeOnly,
+                                    onCheckedChange = { freeOnly = it }
+                                )
+                                Text("Free models only")
+                            }
+
+                            HorizontalDivider()
+
+                            LazyColumn(
+                                Modifier.heightIn(max = 300.dp)
+                            ) {
+                                items(visibleModels) { model ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(
+                                                    model.name,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                                Text(
+                                                    model.id,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                if (model.isFree) {
+                                                    Text(
+                                                        "FREE",
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                        style = MaterialTheme.typography.labelSmall
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        onClick = {
+                                            selectedModel = model.id
+                                            modelExpanded = false
+                                            errorMessage = ""
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (loadingModels) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                        Text("Loading available models...")
+                    }
+
+                    if (modelError.isNotBlank()) {
+                        Text(
+                            modelError,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+
+                    Text(
+                        "${models.size} chat models loaded",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
 
         HorizontalDivider()
 
         LazyColumn(
-            modifier = Modifier
+            Modifier
                 .weight(1f)
                 .fillMaxWidth(),
             contentPadding = PaddingValues(vertical = 14.dp),
@@ -501,22 +640,13 @@ private fun ChatScreen() {
 
             if (isSending) {
                 item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(
                             Modifier.size(20.dp),
                             strokeWidth = 2.dp
                         )
-
                         Spacer(Modifier.width(10.dp))
-
-                        Text(
-                            "OmniChat is thinking...",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                        Text("OmniChat is thinking...")
                     }
                 }
             }
@@ -524,7 +654,7 @@ private fun ChatScreen() {
 
         if (errorMessage.isNotBlank()) {
             Card(
-                modifier = Modifier
+                Modifier
                     .fillMaxWidth()
                     .padding(bottom = 8.dp),
                 colors = CardDefaults.cardColors(
@@ -533,7 +663,7 @@ private fun ChatScreen() {
             ) {
                 Text(
                     errorMessage,
-                    modifier = Modifier.padding(12.dp),
+                    Modifier.padding(12.dp),
                     color = MaterialTheme.colorScheme.onErrorContainer,
                     style = MaterialTheme.typography.bodySmall
                 )
@@ -541,7 +671,7 @@ private fun ChatScreen() {
         }
 
         Row(
-            modifier = Modifier
+            Modifier
                 .fillMaxWidth()
                 .padding(bottom = 12.dp),
             verticalAlignment = Alignment.Bottom
@@ -555,18 +685,13 @@ private fun ChatScreen() {
                 maxLines = 5,
                 enabled = !isSending
             )
-
             Spacer(Modifier.width(8.dp))
-
             FilledIconButton(
                 onClick = sendMessage,
                 enabled = message.isNotBlank() && !isSending,
                 modifier = Modifier.size(52.dp)
             ) {
-                Icon(
-                    Icons.Default.Send,
-                    contentDescription = "Send message"
-                )
+                Icon(Icons.Default.Send, contentDescription = "Send message")
             }
         }
     }
@@ -577,15 +702,11 @@ private fun ChatMessageBubble(message: OpenAiMessage) {
     val isUser = message.role == "user"
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isUser) {
-            Arrangement.End
-        } else {
-            Arrangement.Start
-        }
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
     ) {
         Card(
-            modifier = Modifier.widthIn(max = 320.dp),
+            Modifier.widthIn(max = 320.dp),
             shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(
                 containerColor = if (isUser) {
@@ -602,34 +723,11 @@ private fun ChatMessageBubble(message: OpenAiMessage) {
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
-
                 Spacer(Modifier.height(5.dp))
-
-                Text(
-                    message.content,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                Text(message.content)
             }
         }
     }
-}
-
-@Composable
-private fun AgentsScreen() {
-    SimpleScreen(
-        "AI Agents",
-        "Your personal AI assistants will live here.",
-        Icons.Default.Psychology
-    )
-}
-
-@Composable
-private fun ToolsScreen() {
-    SimpleScreen(
-        "AI Tools",
-        "Coding, research, image and data tools will be added here.",
-        Icons.Default.Build
-    )
 }
 
 @Composable
@@ -639,7 +737,7 @@ private fun SimpleScreen(
     icon: ImageVector
 ) {
     Column(
-        modifier = Modifier
+        Modifier
             .fillMaxSize()
             .padding(24.dp),
         verticalArrangement = Arrangement.Center,
@@ -651,18 +749,15 @@ private fun SimpleScreen(
             modifier = Modifier.size(56.dp),
             tint = MaterialTheme.colorScheme.primary
         )
-
         Spacer(Modifier.height(16.dp))
-
         Text(
             title,
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
-
         Text(
             description,
-            modifier = Modifier.padding(top = 8.dp),
+            Modifier.padding(top = 8.dp),
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
@@ -676,7 +771,7 @@ private fun SettingsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var selectedProvider by remember { mutableStateOf("openai") }
+    var selectedProvider by remember { mutableStateOf("openrouter") }
     var apiKey by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
 
@@ -706,14 +801,13 @@ private fun SettingsScreen(
     }.name
 
     LazyColumn(
-        modifier = Modifier
+        Modifier
             .fillMaxSize()
             .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
             Spacer(Modifier.height(4.dp))
-
             Text(
                 "Settings",
                 style = MaterialTheme.typography.headlineMedium,
@@ -727,7 +821,6 @@ private fun SettingsScreen(
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
-
             Text(
                 "Connect your AI provider using an API key.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -736,32 +829,22 @@ private fun SettingsScreen(
 
         item {
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(18.dp),
+                    Modifier.padding(18.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(
-                        "Select Provider",
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Text("Select Provider", fontWeight = FontWeight.SemiBold)
 
                     Box {
                         OutlinedButton(
                             onClick = { expanded = true },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                providerName,
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            Icon(
-                                Icons.Default.ArrowDropDown,
-                                contentDescription = "Select provider"
-                            )
+                            Text(providerName, Modifier.weight(1f))
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
                         }
 
                         DropdownMenu(
@@ -780,20 +863,8 @@ private fun SettingsScreen(
                                         if (provider.id == "custom") {
                                             val config =
                                                 CustomApiConfigStore.get(context)
-
-                                            customBaseUrl =
-                                                config?.baseUrl ?: ""
-
-                                            customModel =
-                                                config?.model ?: ""
-                                        }
-                                    },
-                                    leadingIcon = {
-                                        if (selectedProvider == provider.id) {
-                                            Icon(
-                                                Icons.Default.Check,
-                                                contentDescription = null
-                                            )
+                                            customBaseUrl = config?.baseUrl ?: ""
+                                            customModel = config?.model ?: ""
                                         }
                                     }
                                 )
@@ -815,9 +886,7 @@ private fun SettingsScreen(
                             },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("API Base URL") },
-                            placeholder = {
-                                Text("https://api.example.com/v1")
-                            },
+                            placeholder = { Text("https://api.example.com/v1") },
                             singleLine = true
                         )
 
@@ -829,14 +898,12 @@ private fun SettingsScreen(
                             },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("Model ID") },
-                            placeholder = {
-                                Text("your-model-name")
-                            },
+                            placeholder = { Text("your-model-name") },
                             singleLine = true
                         )
 
                         Text(
-                            "Endpoint must support the OpenAI-compatible /chat/completions format.",
+                            "Endpoint must support OpenAI-compatible /chat/completions.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -848,24 +915,18 @@ private fun SettingsScreen(
                                     customBaseUrl.trim(),
                                     customModel.trim()
                                 )
-
                                 statusMessage = if (result) {
-                                    "Custom API URL and Model ID saved."
+                                    "Custom API settings saved."
                                 } else {
-                                    "Enter a valid http:// or https:// API URL and Model ID."
+                                    "Enter a valid API URL and Model ID."
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),
                             enabled = customBaseUrl.isNotBlank() &&
                                 customModel.isNotBlank()
                         ) {
-                            Icon(
-                                Icons.Default.Save,
-                                contentDescription = null
-                            )
-
+                            Icon(Icons.Default.Save, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-
                             Text("Save Custom API Settings")
                         }
                     }
@@ -878,11 +939,8 @@ private fun SettingsScreen(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("API Key") },
-                        placeholder = {
-                            Text("Enter your $providerName API key")
-                        },
-                        visualTransformation =
-                            PasswordVisualTransformation(),
+                        placeholder = { Text("Enter your $providerName API key") },
+                        visualTransformation = PasswordVisualTransformation(),
                         singleLine = true
                     )
 
@@ -893,89 +951,82 @@ private fun SettingsScreen(
                                 selectedProvider,
                                 apiKey.trim()
                             )
-
                             if (result) {
                                 saved = true
                                 apiKey = ""
                                 statusMessage =
                                     "$providerName API key saved securely."
                             } else {
-                                statusMessage =
-                                    "Could not save API key. Check the key and try again."
+                                statusMessage = "Could not save API key."
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = apiKey.isNotBlank()
                     ) {
-                        Icon(
-                            Icons.Default.Save,
-                            contentDescription = null
-                        )
-
+                        Icon(Icons.Default.Save, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-
                         Text("Save API Key")
                     }
 
                     if (saved) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 Icons.Default.CheckCircle,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary
                             )
-
                             Spacer(Modifier.width(8.dp))
-
                             Text(
                                 "$providerName API key is saved",
-                                color = MaterialTheme.colorScheme.primary,
-                                style = MaterialTheme.typography.bodyMedium
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
 
-                        if (selectedProvider == "custom") {
+                        if (selectedProvider == "custom" ||
+                            selectedProvider == "openrouter"
+                        ) {
                             OutlinedButton(
                                 onClick = {
                                     val key = SecureApiKeyStore.get(
                                         context,
-                                        "custom"
+                                        selectedProvider
                                     )
 
-                                    val config =
+                                    val config = if (selectedProvider == "openrouter") {
+                                        CustomApiConfig(
+                                            "https://openrouter.ai/api/v1",
+                                            "openrouter/free"
+                                        )
+                                    } else {
                                         CustomApiConfigStore.get(context)
+                                    }
 
                                     if (key.isNullOrBlank() || config == null) {
                                         statusMessage =
-                                            "Save the Custom API URL, Model ID and API key first."
+                                            "Save the API key and configuration first."
                                     } else {
                                         testingConnection = true
                                         statusMessage = "Testing connection..."
 
                                         scope.launch {
                                             try {
-                                                val response =
-                                                    withContext(Dispatchers.IO) {
-                                                        CustomApiChatClient.sendMessage(
-                                                            apiKey = key,
-                                                            config = config,
-                                                            messages = listOf(
-                                                                OpenAiMessage(
-                                                                    "user",
-                                                                    "Reply with OK."
-                                                                )
+                                                val response = withContext(Dispatchers.IO) {
+                                                    CustomApiChatClient.sendMessage(
+                                                        apiKey = key,
+                                                        config = config,
+                                                        messages = listOf(
+                                                            OpenAiMessage(
+                                                                "user",
+                                                                "Reply with OK."
                                                             )
                                                         )
-                                                    }
-
+                                                    )
+                                                }
                                                 statusMessage =
-                                                    "Connection successful. Model replied: ${response.take(160)}"
-
+                                                    "Connection successful: ${response.take(120)}"
                                             } catch (e: Exception) {
                                                 statusMessage =
-                                                    "Connection failed: ${e.message ?: "Unknown error"}"
+                                                    "Connection failed: ${e.message}"
                                             } finally {
                                                 testingConnection = false
                                             }
@@ -996,15 +1047,10 @@ private fun SettingsScreen(
                                         contentDescription = null
                                     )
                                 }
-
                                 Spacer(Modifier.width(8.dp))
-
                                 Text(
-                                    if (testingConnection) {
-                                        "Testing..."
-                                    } else {
-                                        "Test Connection"
-                                    }
+                                    if (testingConnection) "Testing..."
+                                    else "Test Connection"
                                 )
                             }
                         }
@@ -1015,25 +1061,17 @@ private fun SettingsScreen(
                                     context,
                                     selectedProvider
                                 )
-
                                 if (deleted) {
                                     saved = false
-                                    statusMessage =
-                                        "$providerName API key removed."
+                                    statusMessage = "$providerName API key removed."
                                 } else {
-                                    statusMessage =
-                                        "Could not remove API key."
+                                    statusMessage = "Could not remove API key."
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(
-                                Icons.Default.Delete,
-                                contentDescription = null
-                            )
-
+                            Icon(Icons.Default.Delete, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-
                             Text("Remove API Key")
                         }
                     } else {
@@ -1047,10 +1085,7 @@ private fun SettingsScreen(
                     if (statusMessage.isNotBlank()) {
                         Text(
                             statusMessage,
-                            color = if (
-                                statusMessage.startsWith("Connection failed") ||
-                                statusMessage.startsWith("Enter a valid")
-                            ) {
+                            color = if (statusMessage.startsWith("Connection failed")) {
                                 MaterialTheme.colorScheme.error
                             } else {
                                 MaterialTheme.colorScheme.primary
@@ -1064,24 +1099,19 @@ private fun SettingsScreen(
 
         item {
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp)
             ) {
                 Column(
                     Modifier.padding(18.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        "Security & Privacy",
-                        fontWeight = FontWeight.SemiBold
-                    )
-
+                    Text("Security & Privacy", fontWeight = FontWeight.SemiBold)
                     Text(
                         "API keys are encrypted using Android Keystore before being stored on this device.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-
                     Text(
                         "Never share your API keys or commit them to GitHub.",
                         style = MaterialTheme.typography.bodySmall,
@@ -1093,27 +1123,18 @@ private fun SettingsScreen(
 
         item {
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp)
             ) {
                 Row(
-                    modifier = Modifier
+                    Modifier
                         .fillMaxWidth()
                         .padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        Icons.Default.DarkMode,
-                        contentDescription = null
-                    )
-
+                    Icon(Icons.Default.DarkMode, contentDescription = null)
                     Spacer(Modifier.width(14.dp))
-
-                    Text(
-                        "Dark mode",
-                        modifier = Modifier.weight(1f)
-                    )
-
+                    Text("Dark mode", Modifier.weight(1f))
                     Switch(
                         checked = darkMode,
                         onCheckedChange = onThemeChange
